@@ -17194,8 +17194,41 @@ static bool combine_CC(SDValue &LHS, SDValue &RHS, SDValue &CC, const SDLoc &DL,
     return true;
   }
 
+  // If XOR is reused and has an immediate that will fit in XORI,
+  // do not fold
+  auto IsXorImmediate = [](const SDValue &Op) -> bool {
+    if (const auto XorCnst = dyn_cast<ConstantSDNode>(Op)) {
+      auto isLegalXorImmediate = [](int64_t Imm) -> bool {
+                                   return isInt<12>(Imm);
+      };
+      return isLegalXorImmediate(XorCnst->getSExtValue());
+    }
+    return false;
+  };
+  // Fold (X(i1) ^ 1) == 0 -> X != 0
+  auto SingleBitOp = [&DAG](const SDValue &VarOp,
+                            const SDValue &ConstOp) -> bool {
+    if (const auto XorCnst = dyn_cast<ConstantSDNode>(ConstOp)) {
+      const APInt Mask = APInt::getBitsSetFrom(VarOp.getValueSizeInBits(), 1);
+      return (XorCnst->getSExtValue() == 1) && DAG.MaskedValueIsZero(VarOp, Mask);
+    }
+    return false;
+  };
+  auto OnlyUsedBySelectOrBR = [](const SDValue &Op) -> bool {
+    for (const SDNode *UserNode : Op->users()) {
+      const unsigned Opcode = UserNode->getOpcode();
+      if (Opcode != RISCVISD::SELECT_CC && Opcode != RISCVISD::BR_CC) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   // Fold ((xor X, Y), 0, eq/ne) -> (X, Y, eq/ne)
-  if (LHS.getOpcode() == ISD::XOR && isNullConstant(RHS)) {
+  if (LHS.getOpcode() == ISD::XOR && isNullConstant(RHS) &&
+      (!IsXorImmediate(LHS.getOperand(1)) ||
+       SingleBitOp(LHS.getOperand(0), LHS.getOperand(1)) ||
+      OnlyUsedBySelectOrBR(LHS))) {
     RHS = LHS.getOperand(1);
     LHS = LHS.getOperand(0);
     return true;
