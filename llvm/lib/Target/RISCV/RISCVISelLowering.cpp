@@ -17201,6 +17201,12 @@ static bool combine_CC(SDValue &LHS, SDValue &RHS, SDValue &CC, const SDLoc &DL,
     return true;
   }
 
+  // Fold ((sext X), 0, eq/ne) -> (X, 0, eq/ne)
+  if (LHS.getOpcode() == ISD::SIGN_EXTEND_INREG && isNullConstant(RHS)) {
+    LHS = LHS.getOperand(0);
+    return true;
+  }
+
   // Fold ((srl (and X, 1<<C), C), 0, eq/ne) -> ((shl X, XLen-1-C), 0, ge/lt)
   if (isNullConstant(RHS) && LHS.getOpcode() == ISD::SRL && LHS.hasOneUse() &&
       LHS.getOperand(1).getOpcode() == ISD::Constant) {

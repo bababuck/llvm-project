@@ -255,8 +255,7 @@ define i32 @branch_sext_ret(i32 %x) {
 ;
 ; RV64-LABEL: branch_sext_ret:
 ; RV64:       # %bb.0: # %entry
-; RV64-NEXT:    sext.w a1, a0
-; RV64-NEXT:    beqz a1, .LBB11_2
+; RV64-NEXT:    beqz a0, .LBB11_2
 ; RV64-NEXT:  # %bb.1: # %if.then
 ; RV64-NEXT:    ret
 ; RV64-NEXT:  .LBB11_2: # %if.end
