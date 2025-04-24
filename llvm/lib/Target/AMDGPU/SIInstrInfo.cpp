@@ -2558,12 +2558,54 @@ void SIInstrInfo::reMaterialize(MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator I, Register DestReg,
                                 unsigned SubIdx, const MachineInstr &Orig,
                                 const TargetRegisterInfo &RI) const {
+  errs() << SubIdx << "\n";
+  Orig.dump();
+  for (unsigned i = 0; i < Orig.getNumOperands(); ++i)
+    errs() << Orig.getOperand(i).getSubReg() << "\n";
+
+  if (Orig.getOpcode() == AMDGPU::S_MOV_B64 ||
+      Orig.getOpcode() == AMDGPU::V_MOV_B64_e64 ||
+      Orig.getOpcode() == AMDGPU::S_MOV_B64_IMM_PSEUDO ||
+      Orig.getOpcode() == AMDGPU::V_MOV_B64_PSEUDO) {
+
+    if (Orig.getOperand(0).getSubReg() && Orig.getOperand(0).isUndef()) {
+      // TODO: Replace opcode with S_MOV_B32 etc.
+    }
+  }
 
   // Try shrinking the instruction to remat only the part needed for current
   // context.
   // TODO: Handle more cases.
   unsigned Opcode = Orig.getOpcode();
   switch (Opcode) {
+  case AMDGPU::S_MOV_B64: {
+    // Look for a single use of the register that is also a subreg.
+    Register RegToFind = Orig.getOperand(0).getReg();
+    MachineOperand *UseMO = nullptr;
+    for (auto &CandMO : I->operands()) {
+      if (!CandMO.isReg() || CandMO.getReg() != RegToFind || CandMO.isDef())
+        continue;
+      if (UseMO) {
+        UseMO = nullptr;
+        break;
+      }
+      UseMO = &CandMO;
+    }
+    if (!UseMO || UseMO->getSubReg() == AMDGPU::NoSubRegister)
+      break;
+    unsigned SubregSize = RI.getSubRegIdxSize(UseMO->getSubReg());
+    if (SubregSize != 32)
+      break;
+    const MCInstrDesc &TID = get(AMDGPU::S_MOV_B32);
+    // Use a smaller load with the desired size, possibly with updated offset.
+    MachineFunction *MF = MBB.getParent();
+    MachineInstr *MI = MF->CloneMachineInstr(&Orig);
+    MI->setDesc(TID);
+    MI->getOperand(0).setReg(DestReg);
+    MI->getOperand(0).setSubReg(AMDGPU::NoSubRegister);
+    MBB.insert(I, MI);
+    return;
+  }
   case AMDGPU::S_LOAD_DWORDX16_IMM:
   case AMDGPU::S_LOAD_DWORDX8_IMM: {
     if (SubIdx != 0)
