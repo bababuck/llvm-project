@@ -2558,20 +2558,6 @@ void SIInstrInfo::reMaterialize(MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator I, Register DestReg,
                                 unsigned SubIdx, const MachineInstr &Orig,
                                 const TargetRegisterInfo &RI) const {
-  errs() << SubIdx << "\n";
-  Orig.dump();
-  for (unsigned i = 0; i < Orig.getNumOperands(); ++i)
-    errs() << Orig.getOperand(i).getSubReg() << "\n";
-
-  if (Orig.getOpcode() == AMDGPU::S_MOV_B64 ||
-      Orig.getOpcode() == AMDGPU::V_MOV_B64_e64 ||
-      Orig.getOpcode() == AMDGPU::S_MOV_B64_IMM_PSEUDO ||
-      Orig.getOpcode() == AMDGPU::V_MOV_B64_PSEUDO) {
-
-    if (Orig.getOperand(0).getSubReg() && Orig.getOperand(0).isUndef()) {
-      // TODO: Replace opcode with S_MOV_B32 etc.
-    }
-  }
 
   // Try shrinking the instruction to remat only the part needed for current
   // context.
