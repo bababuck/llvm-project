@@ -2565,6 +2565,8 @@ void SIInstrInfo::reMaterialize(MachineBasicBlock &MBB,
   unsigned Opcode = Orig.getOpcode();
   switch (Opcode) {
   case AMDGPU::S_MOV_B64: {
+    errs() << "HERE\n";
+    Orig.dump();
     // Look for a single use of the register that is also a subreg.
     Register RegToFind = Orig.getOperand(0).getReg();
     MachineOperand *UseMO = nullptr;
@@ -2586,6 +2588,8 @@ void SIInstrInfo::reMaterialize(MachineBasicBlock &MBB,
     // Use a smaller load with the desired size, possibly with updated offset.
     MachineFunction *MF = MBB.getParent();
     MachineInstr *MI = MF->CloneMachineInstr(&Orig);
+    MachineRegisterInfo &MRI = MF->getRegInfo();
+    assert(MRI.use_nodbg_empty(DestReg) && "DestReg should have no users yet.");
     MI->setDesc(TID);
     MI->getOperand(0).setReg(DestReg);
     MI->getOperand(0).setSubReg(AMDGPU::NoSubRegister);
