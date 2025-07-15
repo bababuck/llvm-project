@@ -389,6 +389,11 @@ void Instruction::setHasNoSignedWrap(bool b) {
     cast<TruncInst>(this)->setHasNoSignedWrap(b);
 }
 
+void Instruction::setCantActuallyOverflowSigned() {
+  if (auto *Inst = dyn_cast<OverflowingBinaryOperator>(this))
+    Inst->setCantActuallyOverflowSigned(true);
+}
+
 void Instruction::setIsExact(bool b) {
   cast<PossiblyExactOperator>(this)->setIsExact(b);
 }

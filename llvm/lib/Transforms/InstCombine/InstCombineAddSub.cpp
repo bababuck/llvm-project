@@ -1523,7 +1523,7 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
                                  I.hasNoSignedWrap(), I.hasNoUnsignedWrap(),
                                  SQ.getWithInstruction(&I)))
     return replaceInstUsesWith(I, V);
-
+  errs() << "EE0\n";
   if (SimplifyAssociativeOrCommutative(I))
     return &I;
 
@@ -1542,9 +1542,11 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
 
   if (Instruction *R = factorizeMathWithShlOps(I, Builder))
     return R;
+  errs() << "EE1\n";
 
   if (Instruction *X = foldAddWithConstant(I))
     return X;
+  errs() << "EE2\n";
 
   if (Instruction *X = foldNoWrapAdd(I, Builder))
     return X;
@@ -1607,13 +1609,19 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
       match(&I, m_BinOp(m_c_Add(m_Not(m_Value(B)), m_Value(A)), m_One())))
     return BinaryOperator::CreateSub(A, B);
 
+  errs() << "EE2.1\n";
   // (A + RHS) + RHS --> A + (RHS << 1)
   if (match(LHS, m_OneUse(m_c_Add(m_Value(A), m_Specific(RHS)))))
     return BinaryOperator::CreateAdd(A, Builder.CreateShl(RHS, 1, "reass.add"));
 
+  errs() << "EE2.2\n";
   // LHS + (A + LHS) --> A + (LHS << 1)
-  if (match(RHS, m_OneUse(m_c_Add(m_Value(A), m_Specific(LHS)))))
-    return BinaryOperator::CreateAdd(A, Builder.CreateShl(LHS, 1, "reass.add"));
+  if (match(RHS, m_OneUse(m_c_Add(m_Value(A), m_Specific(LHS))))) {
+    Instruction *tmp = BinaryOperator::CreateAdd(A, Builder.CreateShl(LHS, 1, "reass.add"));
+    tmp->dump();
+    return tmp;
+  }
+  errs() << "EE2.3\n";
 
   {
     // (A + C1) + (C2 - B) --> (A - B) + (C1 + C2)
@@ -1633,6 +1641,7 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
       return BinaryOperator::CreateAdd(Sub, C1);
     }
   }
+  errs() << "EE3\n";
 
   // X % C0 + (( X / C0 ) % C1) * C0 => X % (C0 * C1)
   if (Value *V = SimplifyAddWithRemainder(I)) return replaceInstUsesWith(I, V);
@@ -1644,6 +1653,7 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
     Constant *NewMask = ConstantInt::get(RHS->getType(), *C1 - 1);
     return BinaryOperator::CreateAnd(A, NewMask);
   }
+  errs() << "EE4\n";
 
   // ZExt (B - A) + ZExt(A) --> ZExt(B)
   if ((match(RHS, m_ZExt(m_Value(A))) &&
@@ -1651,6 +1661,7 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
       (match(LHS, m_ZExt(m_Value(A))) &&
        match(RHS, m_ZExt(m_NUWSub(m_Value(B), m_Specific(A))))))
     return new ZExtInst(B, LHS->getType());
+  errs() << "EE5\n";
 
   // zext(A) + sext(A) --> 0 if A is i1
   if (match(&I, m_c_BinOp(m_ZExt(m_Value(A)), m_SExt(m_Deferred(A)))) &&
@@ -1684,12 +1695,14 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
 
   if (Instruction *Ext = narrowMathIfNoOverflow(I))
     return Ext;
+  errs() << "EE6\n";
 
   // (add (xor A, B) (and A, B)) --> (or A, B)
   // (add (and A, B) (xor A, B)) --> (or A, B)
   if (match(&I, m_c_BinOp(m_Xor(m_Value(A), m_Value(B)),
                           m_c_And(m_Deferred(A), m_Deferred(B)))))
     return BinaryOperator::CreateOr(A, B);
+  errs() << "EE7\n";
 
   // (add (or A, B) (and A, B)) --> (add A, B)
   // (add (and A, B) (or A, B)) --> (add A, B)
@@ -1746,6 +1759,7 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
     Value *Shl = Builder.CreateShl(A, ShiftAmtC);
     return BinaryOperator::CreateSub(B, Shl);
   }
+  errs() << "EE*\n";
 
   // Canonicalize signum variant that ends in add:
   // (A s>> (BW - 1)) + (zext (A s> 0)) --> (A s>> (BW - 1)) | (zext (A != 0))
@@ -1757,6 +1771,7 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
     Value *Zext = Builder.CreateZExt(NotZero, Ty, "isnotnull.zext");
     return BinaryOperator::CreateOr(LHS, Zext);
   }
+  errs() << "EE9\n";
 
   {
     Value *Cond, *Ext;
@@ -1836,6 +1851,7 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
 
   if (Instruction *R = tryFoldInstWithCtpopWithNot(&I))
     return R;
+  errs() << "EE10\n";
 
   // TODO(jingyue): Consider willNotOverflowSignedAdd and
   // willNotOverflowUnsignedAdd to reduce the number of invocations of
@@ -1844,12 +1860,28 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
   if (!I.hasNoSignedWrap() && willNotOverflowSignedAdd(LHSCache, RHSCache, I)) {
     Changed = true;
     I.setHasNoSignedWrap(true);
+    errs() << "EE12\n";
+    I.dump();
+    auto *OB0 = dyn_cast<OverflowingBinaryOperator>(&I);
+    if (OB0) {
+      OB0->dump();
+      errs() << "HERE\n";
+      OB0->setCantActuallyOverflowSigned(true);
+    }
   }
   if (!I.hasNoUnsignedWrap() &&
       willNotOverflowUnsignedAdd(LHSCache, RHSCache, I)) {
     Changed = true;
-    I.setHasNoUnsignedWrap(true);
+    I.dump();
+    auto *OB0 = dyn_cast<OverflowingBinaryOperator>(&I);
+    if (OB0) {
+      OB0->dump();
+      errs() << "HERE\n";
+      //      OB0->CantActuallyOverflowUnsigned = true;
+    }
+    errs() << "EE13\n";
   }
+  errs() << "EE11\n";
 
   if (Instruction *V = canonicalizeLowbitMask(I, Builder))
     return V;

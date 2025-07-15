@@ -7151,7 +7151,9 @@ static OverflowResult
 computeOverflowForSignedAdd(const WithCache<const Value *> &LHS,
                             const WithCache<const Value *> &RHS,
                             const AddOperator *Add, const SimplifyQuery &SQ) {
+  errs() << "HERE2\n";
   if (Add && Add->hasNoSignedWrap()) {
+    errs() << "HERE\n";
     return OverflowResult::NeverOverflows;
   }
 
@@ -7358,9 +7360,11 @@ static bool includesUndef(UndefPoisonKind Kind) {
 static bool canCreateUndefOrPoison(const Operator *Op, UndefPoisonKind Kind,
                                    bool ConsiderFlagsAndMetadata) {
 
+  errs() << "HELOP\n";
   if (ConsiderFlagsAndMetadata && includesPoison(Kind) &&
       Op->hasPoisonGeneratingAnnotations())
     return true;
+  errs() << "HELOPN\n";
 
   unsigned Opcode = Op->getOpcode();
 
@@ -7574,6 +7578,8 @@ static bool isGuaranteedNotToBeUndefOrPoison(
     const DominatorTree *DT, unsigned Depth, UndefPoisonKind Kind) {
   if (Depth >= MaxAnalysisRecursionDepth)
     return false;
+
+  errs() << "HELO\n";
 
   if (isa<MetadataAsValue>(V))
     return false;

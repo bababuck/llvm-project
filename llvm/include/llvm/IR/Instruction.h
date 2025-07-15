@@ -524,6 +524,8 @@ public:
   /// which supports this flag. See LangRef.html for the meaning of this flag.
   LLVM_ABI void setHasNoSignedWrap(bool b = true);
 
+  LLVM_ABI void setCantActuallyOverflowSigned();
+
   /// Set or clear the exact flag on this instruction, which must be an operator
   /// which supports this flag. See LangRef.html for the meaning of this flag.
   LLVM_ABI void setIsExact(bool b = true);

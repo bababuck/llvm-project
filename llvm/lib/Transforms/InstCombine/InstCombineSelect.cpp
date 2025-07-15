@@ -884,6 +884,7 @@ static Instruction *foldSelectZeroOrMul(SelectInst &SI, InstCombinerImpl &IC) {
   auto *FalseVal = SI.getFalseValue();
   Value *X, *Y;
   CmpPredicate Predicate;
+  errs() << "FOLD\n";
 
   // Assuming that constant compared with zero is not undef (but it may be
   // a vector with some undef elements). Otherwise (when a constant is undef)

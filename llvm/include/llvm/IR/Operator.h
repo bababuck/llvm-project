@@ -80,13 +80,14 @@ public:
   enum {
     AnyWrap        = 0,
     NoUnsignedWrap = (1 << 0),
-    NoSignedWrap   = (1 << 1)
+    NoSignedWrap   = (1 << 1),
+    CantActuallyOverflowUnsigned = (1 << 2),
+    CantActuallyOverflowSigned = (1 << 3)
   };
 
 private:
   friend class Instruction;
   friend class ConstantExpr;
-
   void setHasNoUnsignedWrap(bool B) {
     SubclassOptionalData =
       (SubclassOptionalData & ~NoUnsignedWrap) | (B * NoUnsignedWrap);
@@ -94,6 +95,15 @@ private:
   void setHasNoSignedWrap(bool B) {
     SubclassOptionalData =
       (SubclassOptionalData & ~NoSignedWrap) | (B * NoSignedWrap);
+  }
+public:
+  void setCantActuallyOverflowUnsigned(bool B) {
+    SubclassOptionalData =
+      (SubclassOptionalData & ~CantActuallyOverflowUnsigned) | (B * CantActuallyOverflowUnsigned);
+  }
+  void setCantActuallyOverflowSigned(bool B) {
+    SubclassOptionalData =
+      (SubclassOptionalData & ~CantActuallyOverflowSigned) | (B * CantActuallyOverflowSigned);
   }
 
 public:
