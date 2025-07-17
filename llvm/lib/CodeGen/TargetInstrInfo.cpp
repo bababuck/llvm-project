@@ -1322,28 +1322,40 @@ void TargetInstrInfo::reassociateOps(
   const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
   const TargetRegisterClass *RC = Root.getRegClassConstraint(0, TII, TRI);
 
-  MachineOperand &OpA = Prev.getOperand(OperandIndices[1]);
   MachineOperand &OpB = Root.getOperand(OperandIndices[2]);
-  MachineOperand &OpX = Prev.getOperand(OperandIndices[3]);
-  MachineOperand &OpY = Root.getOperand(OperandIndices[4]);
   MachineOperand &OpC = Root.getOperand(0);
 
-  Register RegA = OpA.getReg();
   Register RegB = OpB.getReg();
-  Register RegX = OpX.getReg();
-  Register RegY = OpY.getReg();
   Register RegC = OpC.getReg();
 
-  if (RegA.isVirtual())
-    MRI.constrainRegClass(RegA, RC);
   if (RegB.isVirtual())
     MRI.constrainRegClass(RegB, RC);
-  if (RegX.isVirtual())
-    MRI.constrainRegClass(RegX, RC);
-  if (RegY.isVirtual())
-    MRI.constrainRegClass(RegY, RC);
   if (RegC.isVirtual())
     MRI.constrainRegClass(RegC, RC);
+
+  MachineOperand &OpA = Prev.getOperand(OperandIndices[1]);
+  Register RegA;
+  bool KillA;
+  RegA = OpA.getReg();
+  KillA = OpA.isKill();
+  if (RegA.isVirtual())
+    MRI.constrainRegClass(RegA, RC);
+
+  MachineOperand &OpX = Prev.getOperand(OperandIndices[3]);
+  Register RegX;
+  bool KillX;
+  RegX = OpX.getReg();
+  KillX = OpX.isKill();
+  if (RegX.isVirtual())
+    MRI.constrainRegClass(RegX, RC);
+
+  MachineOperand &OpY = Root.getOperand(OperandIndices[4]);
+  Register RegY;
+  bool KillY;
+  RegY = OpY.getReg();
+  if (RegY.isVirtual())
+    MRI.constrainRegClass(RegY, RC);
+  KillY = OpY.isKill();
 
   // Create a new virtual register for the result of (X op Y) instead of
   // recycling RegB because the MachineCombiner's computation of the critical
@@ -1352,9 +1364,6 @@ void TargetInstrInfo::reassociateOps(
   InstrIdxForVirtReg.insert(std::make_pair(NewVR, 0));
 
   auto [NewRootOpc, NewPrevOpc] = getReassociationOpcodes(Pattern, Root, Prev);
-  bool KillA = OpA.isKill();
-  bool KillX = OpX.isKill();
-  bool KillY = OpY.isKill();
   bool KillNewVR = true;
 
   auto [SwapRootOperands, SwapPrevOperands] = mustSwapOperands(Pattern);
