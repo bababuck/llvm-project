@@ -753,8 +753,8 @@ define i64 @mul3000_sub8990_c(i64 %x) {
 ; RV32IMB-NEXT:    add a1, a3, a1
 ; RV32IMB-NEXT:    add a0, a2, a0
 ; RV32IMB-NEXT:    sltu a2, a0, a2
-; RV32IMB-NEXT:    add a1, a1, a2
 ; RV32IMB-NEXT:    addi a1, a1, -1
+; RV32IMB-NEXT:    add a1, a1, a2
 ; RV32IMB-NEXT:    ret
 ;
 ; RV64IMB-LABEL: mul3000_sub8990_c:

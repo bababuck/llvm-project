@@ -4329,8 +4329,8 @@ define ptr @slt_select_gep(ptr %p, i32 %y) {
 ; RV64I:       # %bb.0:
 ; RV64I-NEXT:    srli a1, a1, 28
 ; RV64I-NEXT:    andi a1, a1, 8
-; RV64I-NEXT:    add a0, a0, a1
 ; RV64I-NEXT:    addi a0, a0, 16
+; RV64I-NEXT:    add a0, a0, a1
 ; RV64I-NEXT:    ret
 ;
 ; RV64ZBA-LABEL: slt_select_gep:

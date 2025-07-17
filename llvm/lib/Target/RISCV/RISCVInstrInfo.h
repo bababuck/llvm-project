@@ -288,6 +288,11 @@ public:
   bool isAssociativeAndCommutative(const MachineInstr &Inst,
                                    bool Invert) const override;
 
+  bool isAssociativeNotCommutative(const MachineInstr &Inst) const override;
+
+  bool areOpcodesSemanticallyEqualOrInverse(unsigned Opcode1,
+                                            unsigned Opcode2) const override;
+
   std::optional<unsigned> getInverseOpcode(unsigned Opcode) const override;
 
   void getReassociateOperandIndices(

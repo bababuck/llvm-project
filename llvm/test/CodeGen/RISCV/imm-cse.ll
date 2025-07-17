@@ -18,12 +18,12 @@ define void @imm32_cse() nounwind {
 ; RV32I-NEXT:    lui a3, %hi(dst)
 ; RV32I-NEXT:    sw a1, %lo(dst)(a3)
 ; RV32I-NEXT:    lw a1, %lo(src)(a0)
-; RV32I-NEXT:    add a1, a1, a2
-; RV32I-NEXT:    addi a1, a1, 1
+; RV32I-NEXT:    addi a4, a2, 1
+; RV32I-NEXT:    add a1, a1, a4
 ; RV32I-NEXT:    sw a1, %lo(dst)(a3)
 ; RV32I-NEXT:    lw a0, %lo(src)(a0)
+; RV32I-NEXT:    addi a2, a2, 2
 ; RV32I-NEXT:    add a0, a0, a2
-; RV32I-NEXT:    addi a0, a0, 2
 ; RV32I-NEXT:    sw a0, %lo(dst)(a3)
 ; RV32I-NEXT:    ret
   %1 = load volatile i32, ptr @src

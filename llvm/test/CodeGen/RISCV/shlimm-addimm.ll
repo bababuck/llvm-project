@@ -322,8 +322,8 @@ define i64 @shl5_sub47968_c(i64 %x) {
 ; RV32I-NEXT:    addi a0, a0, 1184
 ; RV32I-NEXT:    add a0, a3, a0
 ; RV32I-NEXT:    sltu a2, a0, a3
-; RV32I-NEXT:    add a1, a1, a2
 ; RV32I-NEXT:    addi a1, a1, -1
+; RV32I-NEXT:    add a1, a1, a2
 ; RV32I-NEXT:    ret
 ;
 ; RV64I-LABEL: shl5_sub47968_c:
@@ -391,8 +391,8 @@ define i64 @shl5_sub47969_c(i64 %x) {
 ; RV32I-NEXT:    addi a0, a0, 1183
 ; RV32I-NEXT:    add a0, a3, a0
 ; RV32I-NEXT:    sltu a2, a0, a3
-; RV32I-NEXT:    add a1, a1, a2
 ; RV32I-NEXT:    addi a1, a1, -1
+; RV32I-NEXT:    add a1, a1, a2
 ; RV32I-NEXT:    ret
 ;
 ; RV64I-LABEL: shl5_sub47969_c:

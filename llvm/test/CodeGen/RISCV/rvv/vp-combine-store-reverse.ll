@@ -6,8 +6,8 @@ define void @test_store_reverse_combiner(<vscale x 2 x float> %val, <vscale x 2 
 ; CHECK-LABEL: test_store_reverse_combiner:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    slli a2, a1, 2
-; CHECK-NEXT:    add a0, a2, a0
 ; CHECK-NEXT:    addi a0, a0, -4
+; CHECK-NEXT:    add a0, a2, a0
 ; CHECK-NEXT:    li a2, -4
 ; CHECK-NEXT:    vsetvli zero, a1, e32, m1, ta, ma
 ; CHECK-NEXT:    vsse32.v v8, (a0), a2
@@ -21,8 +21,8 @@ define void @test_store_mask_is_vp_reverse(<vscale x 2 x float> %val, <vscale x 
 ; CHECK-LABEL: test_store_mask_is_vp_reverse:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    slli a2, a1, 2
-; CHECK-NEXT:    add a0, a2, a0
 ; CHECK-NEXT:    addi a0, a0, -4
+; CHECK-NEXT:    add a0, a2, a0
 ; CHECK-NEXT:    li a2, -4
 ; CHECK-NEXT:    vsetvli zero, a1, e32, m1, ta, ma
 ; CHECK-NEXT:    vsse32.v v8, (a0), a2, v0.t

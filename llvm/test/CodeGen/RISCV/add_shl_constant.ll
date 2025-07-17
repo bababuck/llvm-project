@@ -7,8 +7,8 @@ define i32 @add_shl_oneUse(i32 %x, i32 %y) nounwind {
 ; NO-ZBA-LABEL: add_shl_oneUse:
 ; NO-ZBA:       # %bb.0:
 ; NO-ZBA-NEXT:    slli a0, a0, 3
+; NO-ZBA-NEXT:    addi a1, a1, 984
 ; NO-ZBA-NEXT:    add a0, a0, a1
-; NO-ZBA-NEXT:    addi a0, a0, 984
 ; NO-ZBA-NEXT:    ret
 ;
 ; ZBA-LABEL: add_shl_oneUse:

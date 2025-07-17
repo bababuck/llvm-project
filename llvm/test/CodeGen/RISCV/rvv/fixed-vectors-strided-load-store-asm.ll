@@ -931,21 +931,21 @@ define void @strided_load_startval_add_with_splat(ptr noalias nocapture %arg, pt
 ; CHECK-NEXT:    slli a5, a4, 2
 ; CHECK-NEXT:    add a1, a1, a4
 ; CHECK-NEXT:    subw a3, a3, a4
-; CHECK-NEXT:    add a1, a1, a5
+; CHECK-NEXT:    add a4, a4, a0
+; CHECK-NEXT:    add a0, a1, a5
 ; CHECK-NEXT:    slli a3, a3, 32
-; CHECK-NEXT:    srli a3, a3, 32
-; CHECK-NEXT:    add a0, a4, a0
-; CHECK-NEXT:    add a0, a0, a3
-; CHECK-NEXT:    addi a0, a0, 1
+; CHECK-NEXT:    srli a1, a3, 32
+; CHECK-NEXT:    addi a4, a4, 1
+; CHECK-NEXT:    add a1, a4, a1
 ; CHECK-NEXT:  .LBB14_6: # %bb35
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    lbu a3, 0(a1)
+; CHECK-NEXT:    lbu a3, 0(a0)
 ; CHECK-NEXT:    lbu a4, 0(a2)
 ; CHECK-NEXT:    add a3, a4, a3
 ; CHECK-NEXT:    sb a3, 0(a2)
 ; CHECK-NEXT:    addi a2, a2, 1
-; CHECK-NEXT:    addi a1, a1, 5
-; CHECK-NEXT:    bne a2, a0, .LBB14_6
+; CHECK-NEXT:    addi a0, a0, 5
+; CHECK-NEXT:    bne a2, a1, .LBB14_6
 ; CHECK-NEXT:  .LBB14_7: # %bb34
 ; CHECK-NEXT:    ret
 bb:
@@ -1020,9 +1020,9 @@ define void @gather_no_scalar_remainder(ptr noalias nocapture noundef %arg, ptr 
 ; CHECK-NEXT:    beqz a2, .LBB15_3
 ; CHECK-NEXT:  # %bb.1: # %bb2
 ; CHECK-NEXT:    addi a2, a2, -16
+; CHECK-NEXT:    addi a3, a0, 16
 ; CHECK-NEXT:    andi a2, a2, -16
-; CHECK-NEXT:    add a2, a2, a0
-; CHECK-NEXT:    addi a2, a2, 16
+; CHECK-NEXT:    add a2, a2, a3
 ; CHECK-NEXT:    li a3, 5
 ; CHECK-NEXT:    vsetivli zero, 16, e8, mf2, ta, ma
 ; CHECK-NEXT:  .LBB15_2: # %bb4

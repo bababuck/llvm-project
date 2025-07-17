@@ -52,9 +52,9 @@ define i1 @or_icmps_const_1bit_diff(i64 %x) nounwind {
 ; RV32I-LABEL: or_icmps_const_1bit_diff:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    addi a2, a0, -13
+; RV32I-NEXT:    addi a1, a1, -1
 ; RV32I-NEXT:    sltu a0, a2, a0
 ; RV32I-NEXT:    add a0, a1, a0
-; RV32I-NEXT:    addi a0, a0, -1
 ; RV32I-NEXT:    andi a2, a2, -5
 ; RV32I-NEXT:    or a0, a2, a0
 ; RV32I-NEXT:    seqz a0, a0

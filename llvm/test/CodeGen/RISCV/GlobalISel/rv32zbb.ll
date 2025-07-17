@@ -121,8 +121,8 @@ define i64 @ctlz_i64(i64 %a) nounwind {
 ; RV32I-NEXT:    and a1, a1, a5
 ; RV32I-NEXT:    sub a0, a0, a1
 ; RV32I-NEXT:    srli a1, a0, 2
-; RV32I-NEXT:    and a1, a1, a4
 ; RV32I-NEXT:    and a0, a0, a4
+; RV32I-NEXT:    and a1, a1, a4
 ; RV32I-NEXT:    add a0, a1, a0
 ; RV32I-NEXT:    srli a1, a0, 4
 ; RV32I-NEXT:    add a0, a1, a0
@@ -132,8 +132,8 @@ define i64 @ctlz_i64(i64 %a) nounwind {
 ; RV32I-NEXT:    slli a1, a0, 16
 ; RV32I-NEXT:    add a0, a0, a1
 ; RV32I-NEXT:    srli a0, a0, 24
-; RV32I-NEXT:    sub a2, a2, a0
-; RV32I-NEXT:    addi a0, a2, 32
+; RV32I-NEXT:    addi a1, a2, 32
+; RV32I-NEXT:    sub a0, a1, a0
 ; RV32I-NEXT:    li a1, 0
 ; RV32I-NEXT:    ret
 ;

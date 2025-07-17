@@ -575,8 +575,8 @@ define i64 @add_lo_negone(i64 %0) {
 ; RV32I-LABEL: add_lo_negone:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    snez a2, a0
-; RV32I-NEXT:    add a1, a1, a2
 ; RV32I-NEXT:    addi a1, a1, -2
+; RV32I-NEXT:    add a1, a1, a2
 ; RV32I-NEXT:    addi a0, a0, -1
 ; RV32I-NEXT:    ret
   %2 = add nsw i64 %0, -4294967297
@@ -594,8 +594,8 @@ define i64 @add_hi_one_lo_negone(i64 %0) {
 ; RV32I-LABEL: add_hi_one_lo_negone:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    snez a2, a0
-; RV32I-NEXT:    add a1, a1, a2
 ; RV32I-NEXT:    addi a1, a1, 1
+; RV32I-NEXT:    add a1, a1, a2
 ; RV32I-NEXT:    addi a0, a0, -1
 ; RV32I-NEXT:    ret
   %2 = add nsw i64 %0, 8589934591

@@ -2299,6 +2299,17 @@ bool RISCVInstrInfo::hasReassociableSibling(const MachineInstr &Inst,
          RISCV::hasEqualFRM(Inst, Sibling);
 }
 
+bool RISCVInstrInfo::isAssociativeNotCommutative(
+    const MachineInstr &Inst) const {
+  unsigned Opc = Inst.getOpcode();
+  switch (Opc) {
+  default:
+    return false;
+  case RISCV::ADDI:
+    return true;
+  }
+}
+
 bool RISCVInstrInfo::isAssociativeAndCommutative(const MachineInstr &Inst,
                                                  bool Invert) const {
   if (isVectorAssociativeAndCommutative(Inst, Invert))
@@ -2583,6 +2594,23 @@ CombinerObjective RISCVInstrInfo::getCombinerObjective(unsigned Pattern) const {
   default:
     return TargetInstrInfo::getCombinerObjective(Pattern);
   }
+}
+
+static unsigned getBaseOpcode(const unsigned Opcode) {
+  switch (Opcode) {
+  default:
+    return Opcode;
+  case RISCV::ADDI:
+    return RISCV::ADD;
+  }
+}
+
+bool RISCVInstrInfo::areOpcodesSemanticallyEqualOrInverse(
+      unsigned Opcode1, unsigned Opcode2) const {
+  Opcode1 = getBaseOpcode(Opcode1);
+  Opcode2 = getBaseOpcode(Opcode2);
+  return TargetInstrInfo::areOpcodesSemanticallyEqualOrInverse(Opcode1,
+                                                               Opcode2);
 }
 
 bool RISCVInstrInfo::getMachineCombinerPatterns(

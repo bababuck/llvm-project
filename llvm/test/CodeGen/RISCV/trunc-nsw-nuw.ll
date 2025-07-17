@@ -66,8 +66,8 @@ define ptr @gep_nusw_zext_nneg_add_trunc_nuw_nsw(ptr %p, i64 %x) nounwind {
 ; CHECK-LABEL: gep_nusw_zext_nneg_add_trunc_nuw_nsw:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    slli a1, a1, 2
-; CHECK-NEXT:    add a0, a1, a0
 ; CHECK-NEXT:    addi a0, a0, 20
+; CHECK-NEXT:    add a0, a1, a0
 ; CHECK-NEXT:    ret
 entry:
   %trunc = trunc nuw nsw i64 %x to i32
