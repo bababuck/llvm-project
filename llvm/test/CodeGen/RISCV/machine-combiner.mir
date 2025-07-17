@@ -594,8 +594,8 @@ body:             |
     ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
     ; CHECK-NEXT: [[COPY3:%[0-9]+]]:gpr = COPY $x13
     ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
-    ; CHECK-NEXT: [[SLL:%[0-9]+]]:gpr = SLL [[COPY2]], killed [[DIV]]
-    ; CHECK-NEXT: [[SLL1:%[0-9]+]]:gpr = SLL killed [[SLL]], [[COPY3]]
+    ; CHECK-NEXT: [[SLL:%[0-9]+]]:gpr = SLL [[COPY2]], [[COPY3]]
+    ; CHECK-NEXT: [[SLL1:%[0-9]+]]:gpr = SLL killed [[SLL]], killed [[DIV]]
     ; CHECK-NEXT: $x10 = COPY [[SLL1]]
     ; CHECK-NEXT: PseudoRET implicit $x10
     %0:gpr = COPY $x10
