@@ -523,8 +523,8 @@ define void @dynamic_vector(i64 %size, ptr %out) #0 {
 ; RV64I-NEXT:    addi s0, sp, 16
 ; RV64I-NEXT:    .cfi_def_cfa s0, 0
 ; RV64I-NEXT:    csrr a2, vlenb
-; RV64I-NEXT:    mul a0, a2, a0
 ; RV64I-NEXT:    slli a0, a0, 1
+; RV64I-NEXT:    mul a0, a2, a0
 ; RV64I-NEXT:    sub a0, sp, a0
 ; RV64I-NEXT:    lui a2, 1
 ; RV64I-NEXT:  .LBB6_1: # =>This Inner Loop Header: Depth=1
@@ -556,8 +556,8 @@ define void @dynamic_vector(i64 %size, ptr %out) #0 {
 ; RV32I-NEXT:    addi s0, sp, 16
 ; RV32I-NEXT:    .cfi_def_cfa s0, 0
 ; RV32I-NEXT:    csrr a1, vlenb
-; RV32I-NEXT:    mul a0, a1, a0
 ; RV32I-NEXT:    slli a0, a0, 1
+; RV32I-NEXT:    mul a0, a1, a0
 ; RV32I-NEXT:    sub a0, sp, a0
 ; RV32I-NEXT:    lui a1, 1
 ; RV32I-NEXT:  .LBB6_1: # =>This Inner Loop Header: Depth=1

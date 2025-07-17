@@ -49,8 +49,8 @@ define i1 @test_urem_odd(i13 %X) nounwind {
 ; RV32M:       # %bb.0:
 ; RV32M-NEXT:    lui a1, 1
 ; RV32M-NEXT:    addi a1, a1, -819
-; RV32M-NEXT:    mul a0, a0, a1
 ; RV32M-NEXT:    slli a0, a0, 19
+; RV32M-NEXT:    mul a0, a0, a1
 ; RV32M-NEXT:    srli a0, a0, 19
 ; RV32M-NEXT:    sltiu a0, a0, 1639
 ; RV32M-NEXT:    ret
@@ -69,8 +69,8 @@ define i1 @test_urem_odd(i13 %X) nounwind {
 ; RV32MV:       # %bb.0:
 ; RV32MV-NEXT:    lui a1, 1
 ; RV32MV-NEXT:    addi a1, a1, -819
-; RV32MV-NEXT:    mul a0, a0, a1
 ; RV32MV-NEXT:    slli a0, a0, 19
+; RV32MV-NEXT:    mul a0, a0, a1
 ; RV32MV-NEXT:    srli a0, a0, 19
 ; RV32MV-NEXT:    sltiu a0, a0, 1639
 ; RV32MV-NEXT:    ret

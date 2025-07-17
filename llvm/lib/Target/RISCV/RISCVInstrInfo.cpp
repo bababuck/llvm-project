@@ -2307,6 +2307,7 @@ bool RISCVInstrInfo::isAssociativeNotCommutative(
     return false;
   case RISCV::ADDI:
   case RISCV::SLL:
+  case RISCV::SLLI:
   case RISCV::SRL:
   case RISCV::SRA:
     return true;
@@ -2605,6 +2606,10 @@ static unsigned getBaseOpcode(const unsigned Opcode) {
     return Opcode;
   case RISCV::ADDI:
     return RISCV::ADD;
+  case RISCV::SLL:
+    return RISCV::MUL;
+  case RISCV::SLLI:
+    return RISCV::MUL;
   }
 }
 

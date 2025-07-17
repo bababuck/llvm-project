@@ -1353,7 +1353,7 @@ define i32 @muli32_m4352(i32 %a) nounwind {
 ; RV32IM-LABEL: muli32_m4352:
 ; RV32IM:       # %bb.0:
 ; RV32IM-NEXT:    li a1, -17
-; RV32IM-NEXT:    slli a1, a1, 8
+; RV32IM-NEXT:    slli a0, a0, 8
 ; RV32IM-NEXT:    mul a0, a0, a1
 ; RV32IM-NEXT:    ret
 ;
@@ -1506,7 +1506,7 @@ define i64 @muli64_m4352(i64 %a) nounwind {
 ; RV64IM-LABEL: muli64_m4352:
 ; RV64IM:       # %bb.0:
 ; RV64IM-NEXT:    li a1, -17
-; RV64IM-NEXT:    slli a1, a1, 8
+; RV64IM-NEXT:    slli a0, a0, 8
 ; RV64IM-NEXT:    mul a0, a0, a1
 ; RV64IM-NEXT:    ret
   %1 = mul i64 %a, -4352
