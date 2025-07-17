@@ -2307,6 +2307,8 @@ bool RISCVInstrInfo::isAssociativeNotCommutative(
     return false;
   case RISCV::ADDI:
   case RISCV::SLL:
+  case RISCV::SRL:
+  case RISCV::SRA:
     return true;
   }
 }

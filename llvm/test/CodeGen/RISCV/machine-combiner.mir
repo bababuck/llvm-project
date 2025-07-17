@@ -628,8 +628,8 @@ body:             |
     ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
     ; CHECK-NEXT: [[COPY3:%[0-9]+]]:gpr = COPY $x13
     ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
-    ; CHECK-NEXT: [[SRL:%[0-9]+]]:gpr = SRL [[COPY2]], killed [[DIV]]
-    ; CHECK-NEXT: [[SRL1:%[0-9]+]]:gpr = SRL killed [[SRL]], [[COPY3]]
+    ; CHECK-NEXT: [[SRL:%[0-9]+]]:gpr = SRL [[COPY2]], [[COPY3]]
+    ; CHECK-NEXT: [[SRL1:%[0-9]+]]:gpr = SRL killed [[SRL]], killed [[DIV]]
     ; CHECK-NEXT: $x10 = COPY [[SRL1]]
     ; CHECK-NEXT: PseudoRET implicit $x10
     %0:gpr = COPY $x10
@@ -662,8 +662,8 @@ body:             |
     ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
     ; CHECK-NEXT: [[COPY3:%[0-9]+]]:gpr = COPY $x13
     ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
-    ; CHECK-NEXT: [[SRA:%[0-9]+]]:gpr = SRA [[COPY2]], killed [[DIV]]
-    ; CHECK-NEXT: [[SRA1:%[0-9]+]]:gpr = SRA killed [[SRA]], [[COPY3]]
+    ; CHECK-NEXT: [[SRA:%[0-9]+]]:gpr = SRA [[COPY2]], [[COPY3]]
+    ; CHECK-NEXT: [[SRA1:%[0-9]+]]:gpr = SRA killed [[SRA]], killed [[DIV]]
     ; CHECK-NEXT: $x10 = COPY [[SRA1]]
     ; CHECK-NEXT: PseudoRET implicit $x10
     %0:gpr = COPY $x10
