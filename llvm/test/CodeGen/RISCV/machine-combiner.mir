@@ -20,6 +20,192 @@
 
   attributes #0 = { "target-features"="+f" }
 
+  define i64 @assoc_not_profitable(i64 %x, i64 %y) {
+  entry:
+    %add = add i64 %x, %y
+    %add1 = add i64 %add, 2
+    ret i64 %add1
+  }
+
+  define i64 @assoc_multiple_uses(i64 %x, i64 %y, i64 %z) {
+  entry:
+    %mul = mul i64 %x, %y
+    %add = add i64 %mul, %z
+    %add1 = add i64 %add, 2
+    %div = sdiv i64 %add1, %add
+    ret i64 %div
+  }
+
+  define i64 @assoc_addi_recursive(i64 %w, i64 %x, i64 %y, i64 %z) {
+  entry:
+    %mul = mul i64 %w, %x
+    %add = add i64 %mul, %y
+    %add1 = add i64 %add, %z
+    %add2 = add i64 %add1, 2
+    ret i64 %add2
+  }
+
+  ; HELP
+  define i64 @addi_add_reorder(i64 %x, i64 %y, i64 %z) {
+  entry:
+    %mul = mul i64 %y, %x
+    %add = add i64 %mul, 2
+    %add1 = add i64 %add, %z
+    ret i64 %add1
+  }
+
+  ; HELP
+  define i64 @addi_sub_reorder(i64 %x, i64 %y, i64 %z) {
+  entry:
+    %mul = mul i64 %y, %x
+    %add = add i64 %mul, 2
+    %sub = sub i64 %add, %z
+    ret i64 %sub
+  }
+
+  ; HELP
+  define i64 @addi_sub_reorder_comm(i64 %x, i64 %y, i64 %z) {
+  entry:
+    %mul = mul i64 %y, %x
+    %add = add i64 %mul, 2
+    %sub = sub i64 %z, %add
+    ret i64 %sub
+  }
+
+  ; HELP
+  define i64 @sub_addi_reorder(i64 %x, i64 %y, i64 %z) {
+  entry:
+    %mul = mul i64 %y, %x
+    %sub = sub i64 %z, %mul
+    %add = add i64 %sub, 2
+    ret i64 %add
+  }
+
+  ; HELP
+  define i64 @sub_addi_reorder_comm(i64 %x, i64 %y, i64 %z) {
+  entry:
+    %mul = mul i64 %y, %x
+    %sub = sub i64 %mul, %z
+    %add = add i64 %sub, 2
+    ret i64 %add
+  }
+
+  define i64 @add_addi_reorder(i64 %x, i64 %y, i64 %z) {
+  entry:
+    %mul = mul i64 %y, %x
+    %add = add i64 %z, %mul
+    %add1 = add i64 %add, 2
+    ret i64 %add1
+  }
+
+  ; these instructions should already be combined, but want to check on the case
+  ; with two non-register operands
+  define i64 @addi_addi_reorder(i64 %x) {
+  entry:
+    %add = add i64 %x, 2
+    %add1 = add i64 %add, 4
+    ret i64 %add1
+  }
+
+  define i64 @shl_shl_reorder(i64 %w, i64 %x, i64 %y, i64 %z) {
+  entry:
+    %div = sdiv i64 %w, %x
+    %shl = shl i64 %y, %div
+    %shl1 = shl i64 %shl, %z
+    ret i64 %shl1
+  }
+
+  define i64 @lshr_lshr_reorder(i64 %w, i64 %x, i64 %y, i64 %z) {
+  entry:
+    %div = sdiv i64 %w, %x
+    %shr = lshr i64 %y, %div
+    %shr1 = lshr i64 %shr, %z
+    ret i64 %shr1
+  }
+
+  define i64 @ashr_ashr_reorder(i64 %w, i64 %x, i64 %y, i64 %z) {
+  entry:
+    %div = sdiv i64 %w, %x
+    %shr = ashr i64 %y, %div
+    %shr1 = ashr i64 %shr, %z
+    ret i64 %shr1
+  }
+
+  define i64 @lshr_lshri_reorder(i64 %x, i64 %y, i64 %z) {
+  entry:
+    %div = sdiv i64 %x, %y
+    %shr = lshr i64 %z, %div
+    %shr1 = lshr i64 %shr, 2
+    ret i64 %shr1
+  }
+
+  define i64 @ashr_ashri_reorder(i64 %x, i64 %y, i64 %z) {
+  entry:
+    %div = sdiv i64 %x, %y
+    %shr = ashr i64 %z, %div
+    %shr1 = ashr i64 %shr, 2
+    ret i64 %shr1
+  }
+
+  define i64 @shli_shli_reorder(i64 %x) {
+  entry:
+    %shl = shl i64 %x, 3
+    %shl1 = shl i64 %shl, 5
+    ret i64 %shl1
+  }
+
+  ; none of the shl working
+  define i64 @shl_mul_reorder(i64 %w, i64 %x, i64 %y, i64 %z) {
+  entry:
+    %div = sdiv i64 %w, %x
+    %shl = shl i64 %y, %div
+    %mul = mul i64 %shl, %z
+    ret i64 %mul
+  }
+
+  ; HELP
+  define i64 @shl_mul_reorder_op0(i64 %w, i64 %x, i64 %y, i64 %z) {
+  entry:
+    %div = sdiv i64 %w, %x
+    %shl = shl i64 %div, %y
+    %mul = mul i64 %shl, %z
+    ret i64 %mul
+  }
+
+  ; HELP
+  define i64 @shl_mul_reorder_commute(i64 %w, i64 %x, i64 %y, i64 %z) {
+  entry:
+    %div = sdiv i64 %w, %x
+    %shl = shl i64 %y, %div
+    %mul = mul i64 %z, %shl
+    ret i64 %mul
+  }
+
+  ; HELP
+  define i64 @shli_mul_reorder(i64 %x, i64 %y, i64 %z) {
+  entry:
+    %div = sdiv i64 %x, %y
+    %shl = shl i64 %div, 3
+    %mul = mul i64 %shl, %z
+    ret i64 %mul
+  }
+
+  define i64 @mul_shli_reorder(i64 %x, i64 %y, i64 %z) {
+  entry:
+    %div = sdiv i64 %x, %y
+    %mul = mul i64 %z, %div
+    %shl = shl i64 %mul, 3
+    ret i64 %shl
+  }
+
+  define i64 @mul_shl_reorder(i64 %w, i64 %x, i64 %y, i64 %z) {
+  entry:
+    %div = sdiv i64 %w, %x
+    %mul = mul i64 %y, %div
+    %shl = shl i64 %mul, %z
+    ret i64 %shl
+  }
+
 ...
 ---
 name:            foo
@@ -50,7 +236,7 @@ machineFunctionInfo:
   varArgsFrameIndex: 0
   varArgsSaveSize: 0
 body:             |
-  bb.0 (%ir-block.6):
+  bb.0:
     liveins: $x10, $x11, $f10_f, $f11_f, $x12, $x13
 
     ; CHECK-LABEL: name: foo
@@ -83,5 +269,694 @@ body:             |
     %10:fpr32 = nnan ninf nsz arcp contract afn reassoc nofpexcept FSUB_S %3, %8, 7, implicit $frm
     FSW killed %10, %5, 0 :: (store (s32) into %ir.5)
     PseudoRET
+
+...
+---
+name: assoc_not_profitable
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11
+    ; CHECK-LABEL: name: assoc_not_profitable
+    ; CHECK: liveins: $x10, $x11
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[ADD:%[0-9]+]]:gpr = ADD [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[ADDI:%[0-9]+]]:gpr = ADDI killed [[ADD]], 2
+    ; CHECK-NEXT: $x10 = COPY [[ADDI]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = ADD %0:gpr, %1:gpr
+    %3:gpr = ADDI killed %2:gpr, 2
+    $x10 = COPY %3:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: assoc_multiple_uses
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12
+    ; CHECK-LABEL: name: assoc_multiple_uses
+    ; CHECK: liveins: $x10, $x11, $x12
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[ADD:%[0-9]+]]:gpr = ADD killed [[MUL]], [[COPY2]]
+    ; CHECK-NEXT: [[ADDI:%[0-9]+]]:gpr = ADDI [[ADD]], 2
+    ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV killed [[ADD]], killed [[ADDI]]
+    ; CHECK-NEXT: $x10 = COPY [[DIV]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = MUL %0:gpr, %1:gpr
+    %4:gpr = ADD killed %3:gpr, %2:gpr
+    %5:gpr = ADDI %4:gpr, 2
+    %6:gpr = DIV killed %4:gpr, killed %5:gpr
+    $x10 = COPY %6:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: assoc_addi_recursive
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+  - { reg: '$x13', virtual-reg: '%3' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12, $x13
+    ; CHECK-LABEL: name: assoc_addi_recursive
+    ; CHECK: liveins: $x10, $x11, $x12, $x13
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[COPY3:%[0-9]+]]:gpr = COPY $x13
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[ADD:%[0-9]+]]:gpr = ADD [[COPY2]], [[COPY3]]
+    ; CHECK-NEXT: [[ADD1:%[0-9]+]]:gpr = ADD killed [[MUL]], killed [[ADD]]
+    ; CHECK-NEXT: [[ADDI:%[0-9]+]]:gpr = ADDI [[ADD1]], 2
+    ; CHECK-NEXT: $x10 = COPY [[ADDI]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = COPY $x13
+    %4:gpr = MUL %0:gpr, %1:gpr
+    %5:gpr = ADD killed %4:gpr, %2:gpr
+    %6:gpr = ADD killed %5:gpr, %3:gpr
+    %7:gpr = ADDI %6:gpr, 2
+    $x10 = COPY %7:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: addi_add_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12
+    ; CHECK-LABEL: name: addi_add_reorder
+    ; CHECK: liveins: $x10, $x11, $x12
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[ADDI:%[0-9]+]]:gpr = ADDI [[MUL]], 2
+    ; CHECK-NEXT: [[ADD:%[0-9]+]]:gpr = ADD killed [[ADDI]], [[COPY2]]
+    ; CHECK-NEXT: $x10 = COPY [[ADD]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = MUL %0:gpr, %1:gpr
+    %4:gpr = ADDI %3:gpr, 2
+    %5:gpr = ADD killed %4:gpr, %2:gpr
+    $x10 = COPY %5:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: addi_sub_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12
+    ; CHECK-LABEL: name: addi_sub_reorder
+    ; CHECK: liveins: $x10, $x11, $x12
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[ADDI:%[0-9]+]]:gpr = ADDI [[MUL]], 2
+    ; CHECK-NEXT: [[SUB:%[0-9]+]]:gpr = SUB killed [[ADDI]], [[COPY2]]
+    ; CHECK-NEXT: $x10 = COPY [[SUB]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = MUL %0:gpr, %1:gpr
+    %4:gpr = ADDI %3:gpr, 2
+    %5:gpr = SUB killed %4:gpr, %2:gpr
+    $x10 = COPY %5:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: addi_sub_reorder_comm
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12
+    ; CHECK-LABEL: name: addi_sub_reorder_comm
+    ; CHECK: liveins: $x10, $x11, $x12
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[ADDI:%[0-9]+]]:gpr = ADDI [[MUL]], 2
+    ; CHECK-NEXT: [[SUB:%[0-9]+]]:gpr = SUB killed [[COPY2]], [[ADDI]]
+    ; CHECK-NEXT: $x10 = COPY [[SUB]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = MUL %0:gpr, %1:gpr
+    %4:gpr = ADDI %3:gpr, 2
+    %5:gpr = SUB killed %2:gpr, %4:gpr
+    $x10 = COPY %5:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: sub_addi_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12
+    ; CHECK-LABEL: name: sub_addi_reorder
+    ; CHECK: liveins: $x10, $x11, $x12
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[SUB:%[0-9]+]]:gpr = SUB killed [[MUL]], [[COPY2]]
+    ; CHECK-NEXT: [[ADDI:%[0-9]+]]:gpr = ADDI [[SUB]], 2
+    ; CHECK-NEXT: $x10 = COPY [[ADDI]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = MUL %0:gpr, %1:gpr
+    %4:gpr = SUB killed %3:gpr, %2:gpr
+    %5:gpr = ADDI %4:gpr, 2
+    $x10 = COPY %5:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: sub_addi_reorder_comm
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12
+    ; CHECK-LABEL: name: sub_addi_reorder_comm
+    ; CHECK: liveins: $x10, $x11, $x12
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[SUB:%[0-9]+]]:gpr = SUB killed [[COPY2]], [[MUL]]
+    ; CHECK-NEXT: [[ADDI:%[0-9]+]]:gpr = ADDI [[SUB]], 2
+    ; CHECK-NEXT: $x10 = COPY [[ADDI]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = MUL %0:gpr, %1:gpr
+    %4:gpr = SUB killed %2:gpr, %3:gpr
+    %5:gpr = ADDI %4:gpr, 2
+    $x10 = COPY %5:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: add_addi_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12
+    ; CHECK-LABEL: name: add_addi_reorder
+    ; CHECK: liveins: $x10, $x11, $x12
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[ADD:%[0-9]+]]:gpr = ADD [[COPY2]], killed [[MUL]]
+    ; CHECK-NEXT: [[ADDI:%[0-9]+]]:gpr = ADDI killed [[ADD]], 2
+    ; CHECK-NEXT: $x10 = COPY [[ADDI]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = MUL %0:gpr, %1:gpr
+    %4:gpr = ADD %2:gpr, killed %3:gpr
+    %5:gpr = ADDI killed %4:gpr, 2
+    $x10 = COPY %5:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: addi_addi_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+body:             |
+  bb.0:
+    liveins: $x10
+    ; CHECK-LABEL: name: addi_addi_reorder
+    ; CHECK: liveins: $x10
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[ADDI:%[0-9]+]]:gpr = ADDI [[COPY]], 2
+    ; CHECK-NEXT: [[ADDI1:%[0-9]+]]:gpr = ADDI killed [[ADDI]], 4
+    ; CHECK-NEXT: $x10 = COPY [[ADDI1]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = ADDI %0:gpr, 2
+    %2:gpr = ADDI killed %1:gpr, 4
+    $x10 = COPY %2:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: shl_shl_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+  - { reg: '$x13', virtual-reg: '%3' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12, $x13
+    ; CHECK-LABEL: name: shl_shl_reorder
+    ; CHECK: liveins: $x10, $x11, $x12, $x13
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[COPY3:%[0-9]+]]:gpr = COPY $x13
+    ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[SLL:%[0-9]+]]:gpr = SLL [[COPY2]], killed [[DIV]]
+    ; CHECK-NEXT: [[SLL1:%[0-9]+]]:gpr = SLL killed [[SLL]], [[COPY3]]
+    ; CHECK-NEXT: $x10 = COPY [[SLL1]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = COPY $x13
+    %4:gpr = DIV %0:gpr, %1:gpr
+    %5:gpr = SLL %2:gpr, killed %4:gpr
+    %6:gpr = SLL killed %5:gpr, %3:gpr
+    $x10 = COPY %6:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: lshr_lshr_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+  - { reg: '$x13', virtual-reg: '%3' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12, $x13
+    ; CHECK-LABEL: name: lshr_lshr_reorder
+    ; CHECK: liveins: $x10, $x11, $x12, $x13
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[COPY3:%[0-9]+]]:gpr = COPY $x13
+    ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[SRL:%[0-9]+]]:gpr = SRL [[COPY2]], killed [[DIV]]
+    ; CHECK-NEXT: [[SRL1:%[0-9]+]]:gpr = SRL killed [[SRL]], [[COPY3]]
+    ; CHECK-NEXT: $x10 = COPY [[SRL1]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = COPY $x13
+    %4:gpr = DIV %0:gpr, %1:gpr
+    %5:gpr = SRL %2:gpr, killed %4:gpr
+    %6:gpr = SRL killed %5:gpr, %3:gpr
+    $x10 = COPY %6:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: ashr_ashr_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+  - { reg: '$x13', virtual-reg: '%3' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12, $x13
+    ; CHECK-LABEL: name: ashr_ashr_reorder
+    ; CHECK: liveins: $x10, $x11, $x12, $x13
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[COPY3:%[0-9]+]]:gpr = COPY $x13
+    ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[SRA:%[0-9]+]]:gpr = SRA [[COPY2]], killed [[DIV]]
+    ; CHECK-NEXT: [[SRA1:%[0-9]+]]:gpr = SRA killed [[SRA]], [[COPY3]]
+    ; CHECK-NEXT: $x10 = COPY [[SRA1]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = COPY $x13
+    %4:gpr = DIV %0:gpr, %1:gpr
+    %5:gpr = SRA %2:gpr, killed %4:gpr
+    %6:gpr = SRA killed %5:gpr, %3:gpr
+    $x10 = COPY %6:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: lshr_lshri_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12
+    ; CHECK-LABEL: name: lshr_lshri_reorder
+    ; CHECK: liveins: $x10, $x11, $x12
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[SRL:%[0-9]+]]:gpr = SRL [[COPY2]], killed [[DIV]]
+    ; CHECK-NEXT: [[SRLI:%[0-9]+]]:gpr = SRLI killed [[SRL]], 2
+    ; CHECK-NEXT: $x10 = COPY [[SRLI]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = DIV %0:gpr, %1:gpr
+    %4:gpr = SRL %2:gpr, killed %3:gpr
+    %5:gpr = SRLI killed %4:gpr, 2
+    $x10 = COPY %5:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: ashr_ashri_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12
+    ; CHECK-LABEL: name: ashr_ashri_reorder
+    ; CHECK: liveins: $x10, $x11, $x12
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[SRA:%[0-9]+]]:gpr = SRA [[COPY2]], killed [[DIV]]
+    ; CHECK-NEXT: [[SRAI:%[0-9]+]]:gpr = SRAI killed [[SRA]], 2
+    ; CHECK-NEXT: $x10 = COPY [[SRAI]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = DIV %0:gpr, %1:gpr
+    %4:gpr = SRA %2:gpr, killed %3:gpr
+    %5:gpr = SRAI killed %4:gpr, 2
+    $x10 = COPY %5:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: shli_shli_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12
+    ; CHECK-LABEL: name: shli_shli_reorder
+    ; CHECK: liveins: $x10, $x11, $x12
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[SLLI:%[0-9]+]]:gpr = SLLI [[COPY]], 3
+    ; CHECK-NEXT: [[SLLI1:%[0-9]+]]:gpr = SLLI killed [[SLLI]], 5
+    ; CHECK-NEXT: $x10 = COPY [[SLLI1]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = SLLI %0:gpr, 3
+    %2:gpr = SLLI killed %1:gpr, 5
+    $x10 = COPY %2:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: shl_mul_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+  - { reg: '$x12', virtual-reg: '%3' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12, $x13
+    ; CHECK-LABEL: name: shl_mul_reorder
+    ; CHECK: liveins: $x10, $x11, $x12, $x13
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[COPY3:%[0-9]+]]:gpr = COPY $x13
+    ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[SLL:%[0-9]+]]:gpr = SLL [[COPY2]], killed [[DIV]]
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL killed [[SLL]], [[COPY3]]
+    ; CHECK-NEXT: $x10 = COPY [[MUL]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = COPY $x13
+    %4:gpr = DIV %0:gpr, %1:gpr
+    %5:gpr = SLL %2:gpr, killed %4:gpr
+    %6:gpr = MUL killed %5:gpr, %3:gpr
+    $x10 = COPY %6:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: shl_mul_reorder_op0
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+  - { reg: '$x12', virtual-reg: '%3' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12, $x13
+    ; CHECK-LABEL: name: shl_mul_reorder_op0
+    ; CHECK: liveins: $x10, $x11, $x12, $x13
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[COPY3:%[0-9]+]]:gpr = COPY $x13
+    ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[SLL:%[0-9]+]]:gpr = SLL killed [[DIV]], [[COPY2]]
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL killed [[SLL]], [[COPY3]]
+    ; CHECK-NEXT: $x10 = COPY [[MUL]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = COPY $x13
+    %4:gpr = DIV %0:gpr, %1:gpr
+    %5:gpr = SLL killed %4:gpr, %2:gpr
+    %6:gpr = MUL killed %5:gpr, %3:gpr
+    $x10 = COPY %6:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: shl_mul_reorder_commute
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+  - { reg: '$x12', virtual-reg: '%3' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12, $x13
+    ; CHECK-LABEL: name: shl_mul_reorder_commute
+    ; CHECK: liveins: $x10, $x11, $x12, $x13
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[COPY3:%[0-9]+]]:gpr = COPY $x13
+    ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[SLL:%[0-9]+]]:gpr = SLL [[COPY2]], killed [[DIV]]
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL killed [[COPY3]], [[SLL]]
+    ; CHECK-NEXT: $x10 = COPY [[MUL]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = COPY $x13
+    %4:gpr = DIV %0:gpr, %1:gpr
+    %5:gpr = SLL %2:gpr, killed %4:gpr
+    %6:gpr = MUL killed %3:gpr, %5:gpr
+    $x10 = COPY %6:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: shli_mul_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12
+    ; CHECK-LABEL: name: shli_mul_reorder
+    ; CHECK: liveins: $x10, $x11, $x12
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[SLLI:%[0-9]+]]:gpr = SLLI killed [[DIV]], 3
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL killed [[SLLI]], [[COPY2]]
+    ; CHECK-NEXT: $x10 = COPY [[MUL]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = DIV %0:gpr, %1:gpr
+    %4:gpr = SLLI killed %3:gpr, 3
+    %5:gpr = MUL killed %4:gpr, %2:gpr
+    $x10 = COPY %5:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: mul_shli_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12
+    ; CHECK-LABEL: name: mul_shli_reorder
+    ; CHECK: liveins: $x10, $x11, $x12
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL [[COPY2]], killed [[DIV]]
+    ; CHECK-NEXT: [[SLLI:%[0-9]+]]:gpr = SLLI killed [[MUL]], 3
+    ; CHECK-NEXT: $x10 = COPY [[SLLI]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = DIV %0:gpr, %1:gpr
+    %4:gpr = MUL %2:gpr, killed %3:gpr
+    %5:gpr = SLLI killed %4:gpr, 3
+    $x10 = COPY %5:gpr
+    PseudoRET implicit $x10
+
+...
+---
+name: mul_shl_reorder
+tracksRegLiveness: true
+liveins:
+  - { reg: '$x10', virtual-reg: '%0' }
+  - { reg: '$x11', virtual-reg: '%1' }
+  - { reg: '$x12', virtual-reg: '%2' }
+  - { reg: '$x13', virtual-reg: '%3' }
+body:             |
+  bb.0:
+    liveins: $x10, $x11, $x12, $x13
+    ; CHECK-LABEL: name: mul_shl_reorder
+    ; CHECK: liveins: $x10, $x11, $x12, $x13
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: [[COPY:%[0-9]+]]:gpr = COPY $x10
+    ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
+    ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
+    ; CHECK-NEXT: [[COPY3:%[0-9]+]]:gpr = COPY $x13
+    ; CHECK-NEXT: [[DIV:%[0-9]+]]:gpr = DIV [[COPY]], [[COPY1]]
+    ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL [[COPY2]], killed [[DIV]]
+    ; CHECK-NEXT: [[SLL:%[0-9]+]]:gpr = SLL killed [[MUL]], [[COPY3]]
+    ; CHECK-NEXT: $x10 = COPY [[SLL]]
+    ; CHECK-NEXT: PseudoRET implicit $x10
+    %0:gpr = COPY $x10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY $x12
+    %3:gpr = COPY $x13
+    %4:gpr = DIV %0:gpr, %1:gpr
+    %5:gpr = MUL %2:gpr, killed %4:gpr
+    %6:gpr = SLL killed %5:gpr, %3:gpr
+    $x10 = COPY %6:gpr
+    PseudoRET implicit $x10
 
 ...
