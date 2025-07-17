@@ -1287,6 +1287,11 @@ public:
     return false;
   }
 
+  /// Return true when \P Inst is associative but not commutative.
+  virtual bool isAssociativeNotCommutative(const MachineInstr &Inst) const {
+    return false;
+  }
+
   /// Find chains of accumulations that can be rewritten as a tree for increased
   /// ILP.
   bool getAccumulatorReassociationPatterns(
@@ -1328,12 +1333,21 @@ public:
     return std::nullopt;
   }
 
-  /// Return true when \P Opcode1 or its inversion is equal to \P Opcode2.
+  /// Return true when \P Opcode1 or its inversion is equal to \P Opcode2
+  /// semantically This can either mean they are:
+  /// 1. Identical: ADD == ADD
+  /// 2. Inverse Equal: ADD ~== SUB
+  /// 3. Semantically Equal: MUL s== SHL
+  virtual bool areOpcodesSemanticallyEqualOrInverse(unsigned Opcode1,
+                                                    unsigned Opcode2) const;
+
+  /// Return true when \P Opcode1 or its inversion is equal to \P Opcode2
   bool areOpcodesEqualOrInverse(unsigned Opcode1, unsigned Opcode2) const;
 
   /// Return true when \P Inst has reassociable operands in the same \P MBB.
   virtual bool hasReassociableOperands(const MachineInstr &Inst,
-                                       const MachineBasicBlock *MBB) const;
+                                       const MachineBasicBlock *MBB,
+                                       const bool Commutable = true) const;
 
   /// Return true when \P Inst has reassociable sibling.
   virtual bool hasReassociableSibling(const MachineInstr &Inst,

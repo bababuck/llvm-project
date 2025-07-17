@@ -907,8 +907,9 @@ void TargetInstrInfo::lowerCopy(MachineInstr *MI,
   MI->eraseFromParent();
 }
 
-bool TargetInstrInfo::hasReassociableOperands(
-    const MachineInstr &Inst, const MachineBasicBlock *MBB) const {
+bool TargetInstrInfo::hasReassociableOperands(const MachineInstr &Inst,
+                                              const MachineBasicBlock *MBB,
+                                              const bool Commutable) const {
   const MachineOperand &Op1 = Inst.getOperand(1);
   const MachineOperand &Op2 = Inst.getOperand(2);
   const MachineRegisterInfo &MRI = MBB->getParent()->getRegInfo();
@@ -923,7 +924,13 @@ bool TargetInstrInfo::hasReassociableOperands(
     MI2 = MRI.getUniqueVRegDef(Op2.getReg());
 
   // And at least one operand must be defined in MBB.
-  return MI1 && MI2 && (MI1->getParent() == MBB || MI2->getParent() == MBB);
+  return MI1 && (MI2 || !(Commutable)) &&
+         (MI1->getParent() == MBB || (MI2 && MI2->getParent() == MBB));
+}
+
+bool TargetInstrInfo::areOpcodesSemanticallyEqualOrInverse(
+    unsigned Opcode1, unsigned Opcode2) const {
+  return areOpcodesEqualOrInverse(Opcode1, Opcode2);
 }
 
 bool TargetInstrInfo::areOpcodesEqualOrInverse(unsigned Opcode1,
@@ -936,13 +943,16 @@ bool TargetInstrInfo::hasReassociableSibling(const MachineInstr &Inst,
   const MachineBasicBlock *MBB = Inst.getParent();
   const MachineRegisterInfo &MRI = MBB->getParent()->getRegInfo();
   MachineInstr *MI1 = MRI.getUniqueVRegDef(Inst.getOperand(1).getReg());
-  MachineInstr *MI2 = MRI.getUniqueVRegDef(Inst.getOperand(2).getReg());
+  MachineInstr *MI2 = nullptr;
+  if (Inst.getOperand(2).isReg())
+    MI2 = MRI.getUniqueVRegDef(Inst.getOperand(2).getReg());
   unsigned Opcode = Inst.getOpcode();
 
   // If only one operand has the same or inverse opcode and it's the second
   // source operand, the operands must be commuted.
-  Commuted = !areOpcodesEqualOrInverse(Opcode, MI1->getOpcode()) &&
-             areOpcodesEqualOrInverse(Opcode, MI2->getOpcode());
+  Commuted = !areOpcodesSemanticallyEqualOrInverse(Opcode, MI1->getOpcode()) &&
+             MI2 &&
+             areOpcodesSemanticallyEqualOrInverse(Opcode, MI2->getOpcode());
   if (Commuted)
     std::swap(MI1, MI2);
 
@@ -954,7 +964,7 @@ bool TargetInstrInfo::hasReassociableSibling(const MachineInstr &Inst,
   // 3. The previous instruction must have virtual register definitions for its
   //    operands in the same basic block as Inst.
   // 4. The previous instruction's result must only be used by Inst.
-  return areOpcodesEqualOrInverse(Opcode, MI1->getOpcode()) &&
+  return areOpcodesSemanticallyEqualOrInverse(Opcode, MI1->getOpcode()) &&
          (isAssociativeAndCommutative(*MI1) ||
           isAssociativeAndCommutative(*MI1, /* Invert */ true)) &&
          hasReassociableOperands(*MI1, MBB) &&
@@ -968,9 +978,11 @@ bool TargetInstrInfo::hasReassociableSibling(const MachineInstr &Inst,
 // 3. The instruction must have a reassociable sibling.
 bool TargetInstrInfo::isReassociationCandidate(const MachineInstr &Inst,
                                                bool &Commuted) const {
-  return (isAssociativeAndCommutative(Inst) ||
+  bool AssociativeNotCommutable = isAssociativeNotCommutative(Inst);
+  return (AssociativeNotCommutable || isAssociativeAndCommutative(Inst) ||
           isAssociativeAndCommutative(Inst, /* Invert */ true)) &&
-         hasReassociableOperands(Inst, Inst.getParent()) &&
+         hasReassociableOperands(Inst, Inst.getParent(),
+                                 /* Commutable */ !AssociativeNotCommutable) &&
          hasReassociableSibling(Inst, Commuted);
 }
 
@@ -1186,6 +1198,12 @@ std::pair<unsigned, unsigned>
 TargetInstrInfo::getReassociationOpcodes(unsigned Pattern,
                                          const MachineInstr &Root,
                                          const MachineInstr &Prev) const {
+  if (areOpcodesSemanticallyEqualOrInverse(Root.getOpcode(),
+                                           Prev.getOpcode()) &&
+      !areOpcodesEqualOrInverse(Root.getOpcode(), Prev.getOpcode())) {
+    return std::make_pair(Prev.getOpcode(), Root.getOpcode());
+  }
+
   bool AssocCommutRoot = isAssociativeAndCommutative(Root);
   bool AssocCommutPrev = isAssociativeAndCommutative(Prev);
 
@@ -1201,7 +1219,8 @@ TargetInstrInfo::getReassociationOpcodes(unsigned Pattern,
   // Since we have matched one of the reassociation patterns, we expect that the
   // instructions' opcodes are equal or one of them is the inversion of the
   // other.
-  assert(areOpcodesEqualOrInverse(Root.getOpcode(), Prev.getOpcode()) &&
+  assert(areOpcodesSemanticallyEqualOrInverse(Root.getOpcode(),
+                                              Prev.getOpcode()) &&
          "Incorrectly matched pattern");
   unsigned AssocCommutOpcode = Root.getOpcode();
   unsigned InverseOpcode = *getInverseOpcode(Root.getOpcode());
@@ -1326,18 +1345,22 @@ void TargetInstrInfo::reassociateOps(
   MachineOperand &OpX = Prev.getOperand(OperandIndices[3]);
   Register RegX;
   bool KillX;
-  RegX = OpX.getReg();
-  KillX = OpX.isKill();
-  if (RegX.isVirtual())
-    MRI.constrainRegClass(RegX, RC);
+  if (OpX.isReg()) {
+    RegX = OpX.getReg();
+    KillX = OpX.isKill();
+    if (RegX.isVirtual())
+      MRI.constrainRegClass(RegX, RC);
+  }
 
   MachineOperand &OpY = Root.getOperand(OperandIndices[4]);
   Register RegY;
   bool KillY;
-  RegY = OpY.getReg();
-  if (RegY.isVirtual())
-    MRI.constrainRegClass(RegY, RC);
-  KillY = OpY.isKill();
+  if (OpY.isReg()) {
+    RegY = OpY.getReg();
+    if (RegY.isVirtual())
+      MRI.constrainRegClass(RegY, RC);
+    KillY = OpY.isKill();
+  }
 
   // Create a new virtual register for the result of (X op Y) instead of
   // recycling RegB because the MachineCombiner's computation of the critical
@@ -1397,10 +1420,16 @@ void TargetInstrInfo::reassociateOps(
     if (Idx == 0)
       continue;
     if (Idx == PrevFirstOpIdx)
-      MIB1.addReg(RegX, getKillRegState(KillX));
-    else if (Idx == PrevSecondOpIdx)
-      MIB1.addReg(RegY, getKillRegState(KillY));
-    else
+      if (OpX.isReg())
+        MIB1.addReg(RegX, getKillRegState(KillX));
+      else
+        MIB1.add(OpX);
+    else if (Idx == PrevSecondOpIdx) {
+      if (OpY.isReg())
+        MIB1.addReg(RegY, getKillRegState(KillY));
+      else
+        MIB1.add(OpY);
+    } else
       MIB1.add(MO);
   }
   MIB1.copyImplicitOps(Prev);

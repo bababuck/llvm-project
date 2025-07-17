@@ -278,7 +278,8 @@ public:
       DenseMap<Register, unsigned> &InstrIdxForVirtReg) const override;
 
   bool hasReassociableOperands(const MachineInstr &Inst,
-                               const MachineBasicBlock *MBB) const override;
+                               const MachineBasicBlock *MBB,
+                               const bool Commutable = true) const override;
 
   bool hasReassociableSibling(const MachineInstr &Inst,
                               bool &Commuted) const override;

@@ -2240,11 +2240,12 @@ bool RISCVInstrInfo::hasReassociableVectorSibling(const MachineInstr &Inst,
          MRI.hasOneNonDBGUse(MI1->getOperand(0).getReg());
 }
 
-bool RISCVInstrInfo::hasReassociableOperands(
-    const MachineInstr &Inst, const MachineBasicBlock *MBB) const {
+bool RISCVInstrInfo::hasReassociableOperands(const MachineInstr &Inst,
+                                             const MachineBasicBlock *MBB,
+                                             const bool Commutable) const {
   if (!isVectorAssociativeAndCommutative(Inst) &&
       !isVectorAssociativeAndCommutative(Inst, /*Invert=*/true))
-    return TargetInstrInfo::hasReassociableOperands(Inst, MBB);
+    return TargetInstrInfo::hasReassociableOperands(Inst, MBB, Commutable);
 
   const MachineOperand &Op1 = Inst.getOperand(2);
   const MachineOperand &Op2 = Inst.getOperand(3);
