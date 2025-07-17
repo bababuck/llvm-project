@@ -568,7 +568,7 @@ define i64 @add_lo_negone(i64 %0) {
 ; RV64I:       # %bb.0:
 ; RV64I-NEXT:    li a1, -1
 ; RV64I-NEXT:    slli a1, a1, 32
-; RV64I-NEXT:    addi a1, a1, -1
+; RV64I-NEXT:    addi a0, a0, -1
 ; RV64I-NEXT:    add a0, a0, a1
 ; RV64I-NEXT:    ret
 ;

@@ -184,8 +184,8 @@ define zeroext i1 @saddo4.i32(i32 signext %v1, ptr %res) {
 ; RV32-LABEL: saddo4.i32:
 ; RV32:       # %bb.0: # %entry
 ; RV32-NEXT:    lui a2, 4096
-; RV32-NEXT:    addi a2, a2, -1
-; RV32-NEXT:    add a2, a0, a2
+; RV32-NEXT:    addi a3, a0, -1
+; RV32-NEXT:    add a2, a3, a2
 ; RV32-NEXT:    slt a0, a2, a0
 ; RV32-NEXT:    sw a2, 0(a1)
 ; RV32-NEXT:    ret
@@ -202,8 +202,8 @@ define zeroext i1 @saddo4.i32(i32 signext %v1, ptr %res) {
 ; RV32ZBA-LABEL: saddo4.i32:
 ; RV32ZBA:       # %bb.0: # %entry
 ; RV32ZBA-NEXT:    lui a2, 4096
-; RV32ZBA-NEXT:    addi a2, a2, -1
-; RV32ZBA-NEXT:    add a2, a0, a2
+; RV32ZBA-NEXT:    addi a3, a0, -1
+; RV32ZBA-NEXT:    add a2, a3, a2
 ; RV32ZBA-NEXT:    slt a0, a2, a0
 ; RV32ZBA-NEXT:    sw a2, 0(a1)
 ; RV32ZBA-NEXT:    ret
@@ -220,8 +220,8 @@ define zeroext i1 @saddo4.i32(i32 signext %v1, ptr %res) {
 ; RV32ZICOND-LABEL: saddo4.i32:
 ; RV32ZICOND:       # %bb.0: # %entry
 ; RV32ZICOND-NEXT:    lui a2, 4096
-; RV32ZICOND-NEXT:    addi a2, a2, -1
-; RV32ZICOND-NEXT:    add a2, a0, a2
+; RV32ZICOND-NEXT:    addi a3, a0, -1
+; RV32ZICOND-NEXT:    add a2, a3, a2
 ; RV32ZICOND-NEXT:    slt a0, a2, a0
 ; RV32ZICOND-NEXT:    sw a2, 0(a1)
 ; RV32ZICOND-NEXT:    ret

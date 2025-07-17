@@ -615,7 +615,7 @@ define i32 @add4104(i32 %a) {
 ; RV32I-LABEL: add4104:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    lui a1, 1
-; RV32I-NEXT:    addi a1, a1, 8
+; RV32I-NEXT:    addi a0, a0, 8
 ; RV32I-NEXT:    add a0, a0, a1
 ; RV32I-NEXT:    ret
 ;
@@ -632,7 +632,7 @@ define i32 @add8208(i32 %a) {
 ; RV32I-LABEL: add8208:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    lui a1, 2
-; RV32I-NEXT:    addi a1, a1, 16
+; RV32I-NEXT:    addi a0, a0, 16
 ; RV32I-NEXT:    add a0, a0, a1
 ; RV32I-NEXT:    ret
 ;

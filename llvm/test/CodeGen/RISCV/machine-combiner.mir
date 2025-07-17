@@ -383,8 +383,8 @@ body:             |
     ; CHECK-NEXT: [[COPY1:%[0-9]+]]:gpr = COPY $x11
     ; CHECK-NEXT: [[COPY2:%[0-9]+]]:gpr = COPY $x12
     ; CHECK-NEXT: [[MUL:%[0-9]+]]:gpr = MUL [[COPY]], [[COPY1]]
-    ; CHECK-NEXT: [[ADDI:%[0-9]+]]:gpr = ADDI [[MUL]], 2
-    ; CHECK-NEXT: [[ADD:%[0-9]+]]:gpr = ADD killed [[ADDI]], [[COPY2]]
+    ; CHECK-NEXT: [[ADDI:%[0-9]+]]:gpr = ADDI [[COPY2]], 2
+    ; CHECK-NEXT: [[ADD:%[0-9]+]]:gpr = ADD [[MUL]], killed [[ADDI]]
     ; CHECK-NEXT: $x10 = COPY [[ADD]]
     ; CHECK-NEXT: PseudoRET implicit $x10
     %0:gpr = COPY $x10

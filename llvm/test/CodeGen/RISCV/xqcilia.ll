@@ -9,7 +9,7 @@ define i32 @add(i32 %a, i32 %b) {
 ; RV32I-NEXT:    lui a2, 65536
 ; RV32I-NEXT:    add a0, a0, a2
 ; RV32I-NEXT:    lui a2, 573
-; RV32I-NEXT:    addi a2, a2, -1330
+; RV32I-NEXT:    addi a1, a1, -1330
 ; RV32I-NEXT:    add a1, a1, a2
 ; RV32I-NEXT:    and a0, a1, a0
 ; RV32I-NEXT:    addi a0, a0, 13

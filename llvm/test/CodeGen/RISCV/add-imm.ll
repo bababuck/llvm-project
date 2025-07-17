@@ -56,7 +56,7 @@ define i32 @add_positive_high_bound_reject(i32 %a) nounwind {
 ; RV32I-LABEL: add_positive_high_bound_reject:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    lui a1, 1
-; RV32I-NEXT:    addi a1, a1, -1
+; RV32I-NEXT:    addi a0, a0, -1
 ; RV32I-NEXT:    add a0, a0, a1
 ; RV32I-NEXT:    ret
 ;
@@ -120,7 +120,7 @@ define i32 @add_negative_low_bound_reject(i32 %a) nounwind {
 ; RV32I-LABEL: add_negative_low_bound_reject:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    lui a1, 1048575
-; RV32I-NEXT:    addi a1, a1, -1
+; RV32I-NEXT:    addi a0, a0, -1
 ; RV32I-NEXT:    add a0, a0, a1
 ; RV32I-NEXT:    ret
 ;

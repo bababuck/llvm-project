@@ -972,10 +972,12 @@ bool TargetInstrInfo::hasReassociableSibling(const MachineInstr &Inst,
   // 3. The previous instruction must have virtual register definitions for its
   //    operands in the same basic block as Inst.
   // 4. The previous instruction's result must only be used by Inst.
+  bool AssociativeNotCommutative = isAssociativeNotCommutative(*MI1);
   return areOpcodesSemanticallyEqualOrInverse(Opcode, MI1->getOpcode()) &&
-         (isAssociativeAndCommutative(*MI1) ||
+         (AssociativeNotCommutative || isAssociativeAndCommutative(*MI1) ||
           isAssociativeAndCommutative(*MI1, /* Invert */ true)) &&
-         hasReassociableOperands(*MI1, MBB) &&
+         hasReassociableOperands(*MI1, MBB,
+                                 /* Commutable */ !AssociativeNotCommutative) &&
          MRI.hasOneNonDBGUse(MI1->getOperand(0).getReg());
 }
 
@@ -1208,10 +1210,22 @@ std::pair<unsigned, unsigned>
 TargetInstrInfo::getReassociationOpcodes(unsigned Pattern,
                                          const MachineInstr &Root,
                                          const MachineInstr &Prev) const {
-  if (areOpcodesSemanticallyEqualOrInverse(Root.getOpcode(),
-                                           Prev.getOpcode()) &&
-      !areOpcodesEqualOrInverse(Root.getOpcode(), Prev.getOpcode())) {
-    return std::make_pair(Prev.getOpcode(), Root.getOpcode());
+  if (isAssociativeNotCommutative(Root) || isAssociativeNotCommutative(Prev)) {
+    switch (Pattern) {
+    default:
+      llvm_unreachable("Unexpected pattern");
+    case MachineCombinerPattern::REASSOC_XA_BY:
+    case MachineCombinerPattern::REASSOC_XA_YB:
+      return std::make_pair(Prev.getOpcode(), Root.getOpcode());
+    case MachineCombinerPattern::REASSOC_AX_BY:
+    case MachineCombinerPattern::REASSOC_AX_YB:
+      // If not commutative, the operation needs to stick with the second
+      // operand
+      if (isAssociativeNotCommutative(Root))
+        return std::make_pair(Prev.getOpcode(), Root.getOpcode());
+      else
+        return std::make_pair(Root.getOpcode(), Prev.getOpcode());
+    }
   }
 
   bool AssocCommutRoot = isAssociativeAndCommutative(Root);
@@ -1347,10 +1361,12 @@ void TargetInstrInfo::reassociateOps(
   MachineOperand &OpA = Prev.getOperand(OperandIndices[1]);
   Register RegA;
   bool KillA;
-  RegA = OpA.getReg();
-  KillA = OpA.isKill();
-  if (RegA.isVirtual())
-    MRI.constrainRegClass(RegA, RC);
+  if (OpA.isReg()) {
+    RegA = OpA.getReg();
+    KillA = OpA.isKill();
+    if (RegA.isVirtual())
+      MRI.constrainRegClass(RegA, RC);
+  }
 
   MachineOperand &OpX = Prev.getOperand(OperandIndices[3]);
   Register RegX;
@@ -1457,7 +1473,10 @@ void TargetInstrInfo::reassociateOps(
     if (Idx == 0)
       continue;
     if (Idx == RootFirstOpIdx)
-      MIB2 = MIB2.addReg(RegA, getKillRegState(KillA));
+      if (OpA.isReg())
+        MIB2 = MIB2.addReg(RegA, getKillRegState(KillA));
+      else
+        MIB2 = MIB2.add(OpA);
     else if (Idx == RootSecondOpIdx)
       MIB2 = MIB2.addReg(NewVR, getKillRegState(KillNewVR));
     else

@@ -8,7 +8,7 @@ define i32 @test(ptr %p) {
 ; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    lui a1, 20
-; CHECK-NEXT:    addi a1, a1, -1920
+; CHECK-NEXT:    addi a0, a0, -1920
 ; CHECK-NEXT:    add a0, a0, a1
 ; CHECK-NEXT:    li a1, 2
 ; CHECK-NEXT:    sw.rl a1, (a0)

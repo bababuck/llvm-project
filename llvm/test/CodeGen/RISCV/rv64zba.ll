@@ -2060,7 +2060,7 @@ define i64 @add4104(i64 %a) {
 ; RV64I-LABEL: add4104:
 ; RV64I:       # %bb.0:
 ; RV64I-NEXT:    lui a1, 1
-; RV64I-NEXT:    addi a1, a1, 8
+; RV64I-NEXT:    addi a0, a0, 8
 ; RV64I-NEXT:    add a0, a0, a1
 ; RV64I-NEXT:    ret
 ;
@@ -2106,7 +2106,7 @@ define i64 @add8208(i64 %a) {
 ; RV64I-LABEL: add8208:
 ; RV64I:       # %bb.0:
 ; RV64I-NEXT:    lui a1, 2
-; RV64I-NEXT:    addi a1, a1, 16
+; RV64I-NEXT:    addi a0, a0, 16
 ; RV64I-NEXT:    add a0, a0, a1
 ; RV64I-NEXT:    ret
 ;
@@ -4441,7 +4441,7 @@ define i64 @adduw_m3(i64 %x) {
 ; RV64I:       # %bb.0:
 ; RV64I-NEXT:    li a1, 1
 ; RV64I-NEXT:    slli a1, a1, 32
-; RV64I-NEXT:    addi a1, a1, -3
+; RV64I-NEXT:    addi a0, a0, -3
 ; RV64I-NEXT:    add a0, a0, a1
 ; RV64I-NEXT:    ret
 ;
