@@ -279,7 +279,7 @@ public:
 
   bool hasReassociableOperands(const MachineInstr &Inst,
                                const MachineBasicBlock *MBB,
-                               const bool Commutable = true) const override;
+                               const bool Commutable) const override;
 
   bool hasReassociableSibling(const MachineInstr &Inst,
                               bool &Commuted,

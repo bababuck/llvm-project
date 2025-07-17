@@ -1347,7 +1347,7 @@ public:
   /// Return true when \P Inst has reassociable operands in the same \P MBB.
   virtual bool hasReassociableOperands(const MachineInstr &Inst,
                                        const MachineBasicBlock *MBB,
-                                       const bool Commutable = true) const;
+                                       const bool Commutable) const;
 
   /// Return true when \P Inst has reassociable sibling.
   virtual bool hasReassociableSibling(const MachineInstr &Inst,

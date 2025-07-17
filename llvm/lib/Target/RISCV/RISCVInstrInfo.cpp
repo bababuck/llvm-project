@@ -2236,7 +2236,7 @@ bool RISCVInstrInfo::hasReassociableVectorSibling(const MachineInstr &Inst,
   return areRVVInstsReassociable(Inst, *MI1) &&
          (isVectorAssociativeAndCommutative(*MI1) ||
           isVectorAssociativeAndCommutative(*MI1, /* Invert */ true)) &&
-         hasReassociableOperands(*MI1, MBB) &&
+         hasReassociableOperands(*MI1, MBB, /*commutable*/ true) &&
          MRI.hasOneNonDBGUse(MI1->getOperand(0).getReg());
 }
 
