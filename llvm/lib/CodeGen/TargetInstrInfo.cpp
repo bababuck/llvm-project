@@ -1387,6 +1387,11 @@ void TargetInstrInfo::reassociateOps(
   case MachineCombinerPattern::REASSOC_AX_BY:
     PrevFirstOpIdx = OperandIndices[1];
     PrevSecondOpIdx = OperandIndices[3];
+    if (isAssociativeNotCommutative(Prev)) {
+      // Make sure X stays as the second operand
+      PrevFirstOpIdx = OperandIndices[3];
+      PrevSecondOpIdx = OperandIndices[1];
+    }
     RootFirstOpIdx = OperandIndices[2];
     RootSecondOpIdx = OperandIndices[4];
     break;
