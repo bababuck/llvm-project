@@ -1269,24 +1269,6 @@ TargetInstrInfo::getReassociationOpcodes(unsigned Pattern,
   llvm_unreachable("Unhandled combination");
 }
 
-// Return a pair of boolean flags showing if the new root and new prev operands
-// must be swapped. See visual example of the rule in
-// TargetInstrInfo::getReassociationOpcodes.
-static std::pair<bool, bool> mustSwapOperands(unsigned Pattern) {
-  switch (Pattern) {
-  default:
-    llvm_unreachable("Unexpected pattern");
-  case MachineCombinerPattern::REASSOC_AX_BY:
-    return {false, false};
-  case MachineCombinerPattern::REASSOC_XA_BY:
-    return {true, false};
-  case MachineCombinerPattern::REASSOC_AX_YB:
-    return {true, true};
-  case MachineCombinerPattern::REASSOC_XA_YB:
-    return {true, true};
-  }
-}
-
 void TargetInstrInfo::getReassociateOperandIndices(
     const MachineInstr &Root, unsigned Pattern,
     std::array<unsigned, 5> &OperandIndices) const {
@@ -1366,13 +1348,6 @@ void TargetInstrInfo::reassociateOps(
   auto [NewRootOpc, NewPrevOpc] = getReassociationOpcodes(Pattern, Root, Prev);
   bool KillNewVR = true;
 
-  auto [SwapRootOperands, SwapPrevOperands] = mustSwapOperands(Pattern);
-
-  if (SwapPrevOperands) {
-    std::swap(RegX, RegY);
-    std::swap(KillX, KillY);
-  }
-
   unsigned PrevFirstOpIdx, PrevSecondOpIdx;
   unsigned RootFirstOpIdx, RootSecondOpIdx;
   switch (Pattern) {
@@ -1383,22 +1358,22 @@ void TargetInstrInfo::reassociateOps(
     RootSecondOpIdx = OperandIndices[4];
     break;
   case MachineCombinerPattern::REASSOC_AX_YB:
-    PrevFirstOpIdx = OperandIndices[1];
-    PrevSecondOpIdx = OperandIndices[3];
-    RootFirstOpIdx = OperandIndices[4];
-    RootSecondOpIdx = OperandIndices[2];
-    break;
-  case MachineCombinerPattern::REASSOC_XA_BY:
     PrevFirstOpIdx = OperandIndices[3];
     PrevSecondOpIdx = OperandIndices[1];
     RootFirstOpIdx = OperandIndices[2];
     RootSecondOpIdx = OperandIndices[4];
     break;
-  case MachineCombinerPattern::REASSOC_XA_YB:
+  case MachineCombinerPattern::REASSOC_XA_BY:
     PrevFirstOpIdx = OperandIndices[3];
     PrevSecondOpIdx = OperandIndices[1];
     RootFirstOpIdx = OperandIndices[4];
     RootSecondOpIdx = OperandIndices[2];
+    break;
+  case MachineCombinerPattern::REASSOC_XA_YB:
+    PrevFirstOpIdx = OperandIndices[1];
+    PrevSecondOpIdx = OperandIndices[3];
+    RootFirstOpIdx = OperandIndices[2];
+    RootSecondOpIdx = OperandIndices[4];
     break;
   default:
     llvm_unreachable("unexpected MachineCombinerPattern");
@@ -1429,11 +1404,6 @@ void TargetInstrInfo::reassociateOps(
       MIB1.add(MO);
   }
   MIB1.copyImplicitOps(Prev);
-
-  if (SwapRootOperands) {
-    std::swap(RegA, NewVR);
-    std::swap(KillA, KillNewVR);
-  }
 
   MachineInstrBuilder MIB2 =
       buildMINoImplicit(*MF, MIMetadata(Root), TII->get(NewRootOpc), RegC);
