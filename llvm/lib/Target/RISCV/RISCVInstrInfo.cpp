@@ -2309,7 +2309,9 @@ bool RISCVInstrInfo::isAssociativeNotCommutative(
   case RISCV::SLL:
   case RISCV::SLLI:
   case RISCV::SRL:
+  case RISCV::SRLI:
   case RISCV::SRA:
+  case RISCV::SRAI:
     return true;
   }
 }
@@ -2610,6 +2612,10 @@ static unsigned getBaseOpcode(const unsigned Opcode) {
     return RISCV::MUL;
   case RISCV::SLLI:
     return RISCV::MUL;
+  case RISCV::SRAI:
+    return RISCV::SRA;
+  case RISCV::SRLI:
+    return RISCV::SRL;
   }
 }
 
