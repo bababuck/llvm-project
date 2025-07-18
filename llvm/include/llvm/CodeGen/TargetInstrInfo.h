@@ -1278,7 +1278,7 @@ public:
   /// If the instruction's operands must be commuted to have a previous
   /// instruction of the same type define the first source operand, \P Commuted
   /// will be set to true.
-  bool isReassociationCandidate(const MachineInstr &Inst, bool &Commuted) const;
+  bool isReassociationCandidate(const MachineInstr &Inst, bool &Commuted, bool &SupportsAxBy) const;
 
   /// Return true when \P Inst is both associative and commutative. If \P Invert
   /// is true, then the inverse of \P Inst operation must be tested.
@@ -1351,7 +1351,7 @@ public:
 
   /// Return true when \P Inst has reassociable sibling.
   virtual bool hasReassociableSibling(const MachineInstr &Inst,
-                                      bool &Commuted) const;
+                                      bool &Commuted, bool &SupportsAxBy) const;
 
   /// When getMachineCombinerPatterns() finds patterns, this function generates
   /// the instructions that could replace the original code sequence. The client

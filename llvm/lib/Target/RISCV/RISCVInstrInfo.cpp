@@ -2276,12 +2276,13 @@ void RISCVInstrInfo::getReassociateOperandIndices(
 }
 
 bool RISCVInstrInfo::hasReassociableSibling(const MachineInstr &Inst,
-                                            bool &Commuted) const {
+                                            bool &Commuted,
+                                            bool &SupportsAxBy) const {
   if (isVectorAssociativeAndCommutative(Inst) ||
       isVectorAssociativeAndCommutative(Inst, /*Invert=*/true))
     return hasReassociableVectorSibling(Inst, Commuted);
 
-  if (!TargetInstrInfo::hasReassociableSibling(Inst, Commuted))
+  if (!TargetInstrInfo::hasReassociableSibling(Inst, Commuted, SupportsAxBy))
     return false;
 
   const MachineRegisterInfo &MRI = Inst.getMF()->getRegInfo();

@@ -939,7 +939,8 @@ bool TargetInstrInfo::areOpcodesEqualOrInverse(unsigned Opcode1,
 }
 
 bool TargetInstrInfo::hasReassociableSibling(const MachineInstr &Inst,
-                                             bool &Commuted) const {
+                                             bool &Commuted,
+                                             bool &SupportsAxBy) const {
   const MachineBasicBlock *MBB = Inst.getParent();
   const MachineRegisterInfo &MRI = MBB->getParent()->getRegInfo();
   MachineInstr *MI1 = MRI.getUniqueVRegDef(Inst.getOperand(1).getReg());
@@ -955,6 +956,13 @@ bool TargetInstrInfo::hasReassociableSibling(const MachineInstr &Inst,
              areOpcodesSemanticallyEqualOrInverse(Opcode, MI2->getOpcode());
   if (Commuted)
     std::swap(MI1, MI2);
+
+  SupportsAxBy = !((!isAssociativeAndCommutative(*MI1) && isAssociativeNotCommutative(Inst)) || (!isAssociativeAndCommutative(Inst) && isAssociativeNotCommutative(*MI1)));
+
+  // Can't re-associate commuted inverted operands with non-associative operands
+  // Assumes non-communative operands don't have an inverse
+  if (Commuted && (!isAssociativeAndCommutative(Inst) && isAssociativeNotCommutative(*MI1)))
+    return false;
 
   // 1. The previous instruction must be the same type as Inst.
   // 2. The previous instruction must also be associative/commutative or be the
@@ -977,13 +985,13 @@ bool TargetInstrInfo::hasReassociableSibling(const MachineInstr &Inst,
 //    operands in the same basic block.
 // 3. The instruction must have a reassociable sibling.
 bool TargetInstrInfo::isReassociationCandidate(const MachineInstr &Inst,
-                                               bool &Commuted) const {
+                                               bool &Commuted, bool &SupportsAxBy) const {
   bool AssociativeNotCommutable = isAssociativeNotCommutative(Inst);
   return (AssociativeNotCommutable || isAssociativeAndCommutative(Inst) ||
           isAssociativeAndCommutative(Inst, /* Invert */ true)) &&
          hasReassociableOperands(Inst, Inst.getParent(),
                                  /* Commutable */ !AssociativeNotCommutable) &&
-         hasReassociableSibling(Inst, Commuted);
+    hasReassociableSibling(Inst, Commuted, SupportsAxBy);
 }
 
 // Utility routine that checks if \param MO is defined by an
@@ -1159,7 +1167,8 @@ bool TargetInstrInfo::getMachineCombinerPatterns(
     MachineInstr &Root, SmallVectorImpl<unsigned> &Patterns,
     bool DoRegPressureReduce) const {
   bool Commute;
-  if (isReassociationCandidate(Root, Commute)) {
+  bool SupportsAxBy;
+  if (isReassociationCandidate(Root, Commute, SupportsAxBy)) {
     // We found a sequence of instructions that may be suitable for a
     // reassociation of operands to increase ILP. Specify each commutation
     // possibility for the Prev instruction in the sequence and let the
@@ -1168,7 +1177,8 @@ bool TargetInstrInfo::getMachineCombinerPatterns(
       Patterns.push_back(MachineCombinerPattern::REASSOC_AX_YB);
       Patterns.push_back(MachineCombinerPattern::REASSOC_XA_YB);
     } else {
-      Patterns.push_back(MachineCombinerPattern::REASSOC_AX_BY);
+      if (SupportsAxBy)
+        Patterns.push_back(MachineCombinerPattern::REASSOC_AX_BY);
       Patterns.push_back(MachineCombinerPattern::REASSOC_XA_BY);
     }
     return true;
