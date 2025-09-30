@@ -782,7 +782,11 @@ bool FunctionSpecializer::run() {
       ++NumCandidates;
   }
 
-  if (!NumCandidates) {
+  unsigned IndepSpecs = 0;
+  for (auto &S : AllSpecs)
+    if (!S.AllChains)
+      ++IndepSpecs;
+  if (!NumCandidates || !IndepSpecs) {
     LLVM_DEBUG(
         dbgs()
         << "FnSpecialization: No possible specializations found in module\n");
@@ -801,8 +805,8 @@ bool FunctionSpecializer::run() {
       return AllSpecs[I].Score > AllSpecs[J].Score;
     return I > J;
   };
-  const unsigned NSpecs =
-      std::min(NumCandidates * MaxClones, unsigned(AllSpecs.size()));
+  const unsigned NSpecs = std::min(
+      {NumCandidates * MaxClones, unsigned(AllSpecs.size()), IndepSpecs});
   SmallVector<unsigned> BestSpecs(NSpecs + 1);
   std::iota(BestSpecs.begin(), BestSpecs.begin() + NSpecs, 0);
   if (AllSpecs.size() > NSpecs) {
@@ -1229,7 +1233,7 @@ bool FunctionSpecializer::findSpecializations(
 
       if (CS.getFunction() == F && !Spec.CallSites[0].Parent) {
         Spec.CallSites.clear();
-        Spec.AllChains = true;
+        // Don't reset AllChains since this can be standalone specialized
       }
       UniqueSpecs[S] = Index;
 
