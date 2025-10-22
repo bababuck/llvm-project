@@ -22448,7 +22448,8 @@ PreservedAnalyses SLPVectorizerPass::run(Function &F, FunctionAnalysisManager &A
   auto *DB = &AM.getResult<DemandedBitsAnalysis>(F);
   auto *ORE = &AM.getResult<OptimizationRemarkEmitterAnalysis>(F);
 
-  bool Changed = runImpl(F, SE, TTI, TLI, AA, LI, DT, AC, DB, ORE);
+  bool Changed;
+  while ((Changed = runImpl(F, SE, TTI, TLI, AA, LI, DT, AC, DB, ORE)));
   if (!Changed)
     return PreservedAnalyses::all();
 
