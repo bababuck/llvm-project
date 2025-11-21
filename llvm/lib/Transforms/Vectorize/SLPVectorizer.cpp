@@ -6529,7 +6529,8 @@ static bool isReverseOrder(ArrayRef<unsigned> Order) {
 /// Otherwise, SCEV* of the stride value is returned.
 static const SCEV *calculateRtStride(ArrayRef<Value *> PointerOps, Type *ElemTy,
                                      const DataLayout &DL, ScalarEvolution &SE,
-                                     SmallVectorImpl<unsigned> &SortedIndices) {
+                                     SmallVectorImpl<unsigned> &SortedIndices,
+                                     SmallVectorImpl<int64_t> &Coeffs) {
   SmallVector<const SCEV *> SCEVs;
   const SCEV *PtrSCEVLowest = nullptr;
   const SCEV *PtrSCEVHighest = nullptr;
@@ -6604,12 +6605,14 @@ static const SCEV *calculateRtStride(ArrayRef<Value *> PointerOps, Type *ElemTy,
       const auto *SC = dyn_cast<SCEVConstant>(Coeff);
       if (!SC || isa<SCEVCouldNotCompute>(SC))
         return nullptr;
+      Coeffs.push_back((int64_t)SC->getAPInt().getLimitedValue());
       if (!SE.getMinusSCEV(PtrSCEV, SE.getAddExpr(PtrSCEVLowest,
                                                   SE.getMulExpr(Stride, SC)))
                ->isZero())
         return nullptr;
       Dist = SC->getAPInt().getZExtValue();
-    }
+    } else
+      Coeffs.push_back(0);
     // If the strides are not the same or repeated, we can't vectorize.
     if ((Dist / Size) * Size != Dist || (Dist / Size) >= SCEVs.size())
       return nullptr;
@@ -7105,18 +7108,170 @@ bool BoUpSLP::analyzeRtStrideCandidate(ArrayRef<Value *> PointerOps,
                                        Type *ScalarTy, Align CommonAlignment,
                                        SmallVectorImpl<unsigned> &SortedIndices,
                                        StridedPtrInfo &SPtrInfo) const {
+  // If each value in `PointerOps` is of the form `%x + Offset` where `Offset`
+  // is constant for each offset we record values from `PointerOps` and their
+  // indicies in `PointerOps`.
+  SmallDenseMap<int64_t, std::pair<SmallVector<Value *>, SmallVector<unsigned>>>
+      OffsetToPointerOpIdxMap;
+  for (auto [Idx, Ptr] : enumerate(PointerOps)) {
+    const SCEV *PtrSCEV = SE->getSCEV(Ptr);
+    if (!PtrSCEV)
+      return false;
+
+    const auto *Add = dyn_cast<SCEVAddExpr>(PtrSCEV);
+    int64_t Offset = 0;
+    if (Add) {
+      // `Offset` is non-zero.
+      for (int I : seq<int>(Add->getNumOperands())) {
+        const auto *SC = dyn_cast<SCEVConstant>(Add->getOperand(I));
+        if (!SC)
+          continue;
+        Offset = SC->getAPInt().getSExtValue();
+        break;
+      }
+    }
+    OffsetToPointerOpIdxMap[Offset].first.push_back(Ptr);
+    OffsetToPointerOpIdxMap[Offset].second.push_back(Idx);
+  }
+  int NumOffsets = OffsetToPointerOpIdxMap.size();
+
   const unsigned Sz = PointerOps.size();
-  FixedVectorType *StridedLoadTy = getWidenedType(ScalarTy, Sz);
+  unsigned VecSz = Sz;
+  Type *NewScalarTy = ScalarTy;
+  if (NumOffsets > 1) {
+    if (Sz % NumOffsets != 0)
+      return false;
+    VecSz = Sz / NumOffsets;
+    NewScalarTy = Type::getIntNTy(
+        SE->getContext(),
+        DL->getTypeSizeInBits(ScalarTy).getFixedValue() * NumOffsets);
+  }
+  FixedVectorType *StridedLoadTy = getWidenedType(NewScalarTy, VecSz);
   if (Sz <= MinProfitableStridedLoads || !TTI->isTypeLegal(StridedLoadTy) ||
       !TTI->isLegalStridedLoadStore(StridedLoadTy, CommonAlignment))
     return false;
-  if (const SCEV *Stride =
-          calculateRtStride(PointerOps, ScalarTy, *DL, *SE, SortedIndices)) {
-    SPtrInfo.Ty = getWidenedType(ScalarTy, PointerOps.size());
-    SPtrInfo.StrideSCEV = Stride;
-    return true;
+
+  // Check if the offsets are contiguous.
+  SmallVector<int64_t> SortedOffsetsV;
+  for (auto [K, _] : OffsetToPointerOpIdxMap)
+    SortedOffsetsV.push_back(K);
+  sort(SortedOffsetsV);
+
+  if (NumOffsets > 1) {
+    for (int I : seq<int>(1, SortedOffsetsV.size())) {
+      if (SortedOffsetsV[I] - SortedOffsetsV[I - 1] != 1)
+        return false;
+    }
   }
-  return false;
+
+  // For the set of pointers with the same offset check that the distance
+  // between adjacent pointers are all equal to the same value (stride). As we
+  // do that, also calculate SortedIndices. Since we should not modify
+  // `SortedIndices` unless we know that all the checks succeed, record the
+  // indicies into `SortedIndicesDraft`.
+  int64_t LowestOffset = SortedOffsetsV[0];
+  SmallVector<Value *> &PointerOps0 =
+      OffsetToPointerOpIdxMap[LowestOffset].first;
+
+  SmallVector<int64_t> Coeffs0;
+  SmallVector<unsigned> SortedIndicesForOffset0;
+  const SCEV *Stride0 = calculateRtStride(PointerOps0, ScalarTy, *DL, *SE,
+                                          SortedIndicesForOffset0, Coeffs0);
+  if (!Stride0)
+    return false;
+  unsigned NumCoeffs0 = Coeffs0.size();
+  if (NumCoeffs0 * NumOffsets != Sz)
+    return false;
+  sort(Coeffs0);
+
+  SmallVector<unsigned> SortedIndicesDraft;
+  SortedIndicesDraft.resize(Sz);
+
+  auto UpdateSortedIndices =
+      [&](SmallVectorImpl<unsigned> &SortedIndicesForOffset,
+          const SmallVectorImpl<unsigned> &IndicesInAllPointerOps,
+          const int64_t OffsetNum) {
+        if (SortedIndicesForOffset.empty()) {
+          SortedIndicesForOffset.resize(IndicesInAllPointerOps.size());
+          std::iota(SortedIndicesForOffset.begin(),
+                    SortedIndicesForOffset.end(), 0);
+        }
+        // Let `PointerOps_i` be the subset of `PointerOps` with offset `SortedOffsetsV[i]`.
+        // Let `SortedIndices_i` be such that the sequence 
+        // `PointerOps_i[SortedIndices_i[0]], PointerOps_i[SortedIndices_i[1]], PointerOps_i[SortedIndices_i[2]]` is sorted. 
+        // PointerOps
+        // Then the sorted `PointerOps` looks like this:
+        // ```
+        // PointerOps_0[SortedIndices_0[0]],
+        // PointerOps_1[SortedIndices_1[0]],
+        // PointerOps_2[SortedIndices_2[0]],
+        // ...
+        // PointerOps_(NumOffsets - 1)[SortedIndices_(NumOffsets - 1)[0]],
+        //
+        // PointerOps_0[SortedIndices_0[1]],
+        // PointerOps_1[SortedIndices_1[1]],
+        // PointerOps_2[SortedIndices_2[1]],
+        // ...
+        // PointerOps_(NumOffsets - 1)[SortedIndices_(NumOffsets - 1)[1]],
+        //
+        // PointerOps_0[SortedIndices_0[2]],
+        // PointerOps_1[SortedIndices_1[2]],
+        // PointerOps_2[SortedIndices_2[2]],
+        // ...
+        // PointerOps_(NumOffsets - 1)[SortedIndices_(NumOffsets - 1)[2]],
+        // ...
+        // ...
+        // ...
+        // PointerOps_0[SortedIndices_0[VecSz - 1]],
+        // PointerOps_1[SortedIndices_1[VecSz - 1]],
+        // PointerOps_2[SortedIndices_2[VecSz - 1]],
+        // ...
+        // PointerOps_(NumOffsets - 1)[SortedIndices_(NumOffsets - 1)[VecSz - 1]],
+        // ```
+        // Thus `PointerOps_OffsetNum[SortedIndices_OffsetNum[k]] = PointerOps[SortedIndices[NumOffsets * k + OffsetNum]]`
+        // But from the definition of `OffsetToPointerOpIdxMap` we have:
+        // `PointerOps_OffsetNum[i] = PointerOps[IndicesInAllPointerOps[i]]`
+        for (const auto [Num, Idx] : enumerate(SortedIndicesForOffset)) {
+          SortedIndicesDraft[Num * NumOffsets + OffsetNum] =
+              IndicesInAllPointerOps[Idx];
+        }
+      };
+
+  SmallVector<unsigned> &IndicesInAllPointerOps0 =
+      OffsetToPointerOpIdxMap[LowestOffset].second;
+  UpdateSortedIndices(SortedIndicesForOffset0, IndicesInAllPointerOps0, 0);
+
+  SmallVector<int64_t> Coeffs;
+  SmallVector<unsigned> SortedIndicesForOffset;
+  for (int I : seq<int>(1, NumOffsets)) {
+    Coeffs.clear();
+    SortedIndicesForOffset.clear();
+
+    int64_t Offset = SortedOffsetsV[I];
+    SmallVector<Value *> &PointerOpsForOffset =
+        OffsetToPointerOpIdxMap[Offset].first;
+    SmallVector<unsigned> &IndicesInAllPointerOps =
+        OffsetToPointerOpIdxMap[Offset].second;
+    const SCEV *StrideWithinGroup =
+        calculateRtStride(PointerOpsForOffset, ScalarTy, *DL, *SE,
+                          SortedIndicesForOffset, Coeffs);
+
+    if (!StrideWithinGroup || StrideWithinGroup != Stride0)
+      return false;
+    if (Coeffs.size() != NumCoeffs0)
+      return false;
+    sort(Coeffs);
+    if (Coeffs != Coeffs0)
+      return false;
+
+    UpdateSortedIndices(SortedIndicesForOffset, IndicesInAllPointerOps, I);
+  }
+
+  SortedIndices.clear();
+  SortedIndices = SortedIndicesDraft;
+  SPtrInfo.StrideSCEV = Stride0;
+  SPtrInfo.Ty = StridedLoadTy;
+  return true;
 }
 
 BoUpSLP::LoadsState BoUpSLP::canVectorizeLoads(
