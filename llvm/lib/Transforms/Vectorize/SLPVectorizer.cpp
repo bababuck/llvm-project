@@ -3882,7 +3882,7 @@ private:
 
   class TreeEntry {
   public:
-    using VecTreeTy = SmallVector<std::unique_ptr<TreeEntry>, 8>;
+    using VecTreeTy = SmallVector<std::shared_ptr<TreeEntry>, 8>;
     TreeEntry(VecTreeTy &Container) : Container(Container) {}
 
     /// \returns Common mask for reorder indices and reused scalars.
@@ -8077,7 +8077,7 @@ bool BoUpSLP::isProfitableToReorder() const {
         VectorizableTree.front()->getOpcode() == Instruction::Store &&
         VectorizableTree.front()->ReorderIndices.empty()) {
       const unsigned ReorderedSplitsCnt =
-          count_if(VectorizableTree, [&](const std::unique_ptr<TreeEntry> &TE) {
+          count_if(VectorizableTree, [&](const std::shared_ptr<TreeEntry> &TE) {
             return TE->State == TreeEntry::SplitVectorize &&
                    !TE->ReorderIndices.empty() && TE->UserTreeIndex.UserTE &&
                    TE->UserTreeIndex.UserTE->State == TreeEntry::Vectorize &&
@@ -8085,7 +8085,7 @@ bool BoUpSLP::isProfitableToReorder() const {
           });
       if (ReorderedSplitsCnt <= 1 &&
           static_cast<unsigned>(count_if(
-              VectorizableTree, [&](const std::unique_ptr<TreeEntry> &TE) {
+              VectorizableTree, [&](const std::shared_ptr<TreeEntry> &TE) {
                 return ((!TE->isGather() &&
                          (TE->ReorderIndices.empty() ||
                           (TE->UserTreeIndex.UserTE &&
@@ -8108,7 +8108,7 @@ bool BoUpSLP::isProfitableToReorder() const {
     bool HasPhis = false;
     bool HasLoad = true;
     unsigned GatherLoads = 0;
-    for (const std::unique_ptr<TreeEntry> &TE :
+    for (const std::shared_ptr<TreeEntry> &TE :
          ArrayRef(VectorizableTree).drop_front()) {
       if (TE->State == TreeEntry::SplitVectorize)
         continue;
@@ -8195,7 +8195,7 @@ void BoUpSLP::reorderTopToBottom() {
   // Currently the are vectorized stores,loads,extracts + some gathering of
   // extracts.
   for_each(VectorizableTree, [&, &TTIRef = *TTI](
-                                 const std::unique_ptr<TreeEntry> &TE) {
+                                 const std::shared_ptr<TreeEntry> &TE) {
     // Look for external users that will probably be vectorized.
     SmallVector<OrdersType, 1> ExternalUserReorderIndices =
         findExternalStoreUsersReorderIndices(TE.get());
@@ -8387,7 +8387,7 @@ void BoUpSLP::reorderTopToBottom() {
       return I < E ? static_cast<int>(I) : PoisonMaskElem;
     });
     // Do an actual reordering, if profitable.
-    for (std::unique_ptr<TreeEntry> &TE : VectorizableTree) {
+    for (std::shared_ptr<TreeEntry> &TE : VectorizableTree) {
       // Just do the reordering for the nodes with the given VF.
       if (TE->Scalars.size() != VF) {
         if (TE->ReuseShuffleIndices.size() == VF) {
@@ -8530,7 +8530,7 @@ void BoUpSLP::reorderBottomToTop(bool IgnoreReorder) {
   // Currently the are vectorized loads,extracts without alternate operands +
   // some gathering of extracts.
   SmallPtrSet<const TreeEntry *, 4> NonVectorized;
-  for (const std::unique_ptr<TreeEntry> &TE : VectorizableTree) {
+  for (const std::shared_ptr<TreeEntry> &TE : VectorizableTree) {
     if (TE->State != TreeEntry::Vectorize &&
         TE->State != TreeEntry::StridedVectorize &&
         TE->State != TreeEntry::CompressVectorize &&
@@ -13084,7 +13084,7 @@ void BoUpSLP::transformNodes() {
   // gathered nodes each having less than 16 elements.
   constexpr unsigned VFLimit = 16;
   bool ForceLoadGather =
-      count_if(VectorizableTree, [&](const std::unique_ptr<TreeEntry> &TE) {
+      count_if(VectorizableTree, [&](const std::shared_ptr<TreeEntry> &TE) {
         return TE->isGather() && TE->hasState() &&
                TE->getOpcode() == Instruction::Load &&
                TE->getVectorFactor() < VFLimit;
@@ -13459,7 +13459,7 @@ void BoUpSLP::transformNodes() {
         getCanonicalGraphSize() != getTreeSize() && UserIgnoreList &&
         getCanonicalGraphSize() <= SmallTree &&
         count_if(ArrayRef(VectorizableTree).drop_front(getCanonicalGraphSize()),
-                 [](const std::unique_ptr<TreeEntry> &TE) {
+                 [](const std::shared_ptr<TreeEntry> &TE) {
                    return TE->isGather() && TE->hasState() &&
                           TE->getOpcode() == Instruction::Load &&
                           !allSameBlock(TE->Scalars);
@@ -13473,7 +13473,7 @@ void BoUpSLP::transformNodes() {
                  SmallVector<SmallVector<std::pair<LoadInst *, int64_t>>>, 8>
       GatheredLoads;
 
-  for (std::unique_ptr<TreeEntry> &TE : VectorizableTree) {
+  for (std::shared_ptr<TreeEntry> &TE : VectorizableTree) {
     TreeEntry &E = *TE;
     if (E.isGather() &&
         ((E.hasState() && E.getOpcode() == Instruction::Load) ||
@@ -14065,7 +14065,7 @@ public:
     // vectorized already.
     bool PrevNodeFound = any_of(
         ArrayRef(R.VectorizableTree).take_front(E->Idx),
-        [&](const std::unique_ptr<TreeEntry> &TE) {
+        [&](const std::shared_ptr<TreeEntry> &TE) {
           return ((TE->hasState() && !TE->isAltShuffle() &&
                    TE->getOpcode() == Instruction::ExtractElement) ||
                   TE->isGather()) &&
@@ -15310,7 +15310,7 @@ BoUpSLP::getEntryCost(const TreeEntry *E, ArrayRef<Value *> VectorizedVals,
     // Try to find the previous shuffle node with the same operands and same
     // main/alternate ops.
     auto TryFindNodeWithEqualOperands = [=]() {
-      for (const std::unique_ptr<TreeEntry> &TE : VectorizableTree) {
+      for (const std::shared_ptr<TreeEntry> &TE : VectorizableTree) {
         if (TE.get() == E)
           break;
         if (TE->hasState() && TE->isAltShuffle() &&
@@ -15611,7 +15611,7 @@ bool BoUpSLP::isTreeTinyAndNotFullyVectorizable(bool ForReduction) const {
   constexpr int Limit = 4;
   if (!ForReduction && !SLPCostThreshold.getNumOccurrences() &&
       !VectorizableTree.empty() &&
-      all_of(VectorizableTree, [&](const std::unique_ptr<TreeEntry> &TE) {
+      all_of(VectorizableTree, [&](const std::shared_ptr<TreeEntry> &TE) {
         return (TE->isGather() &&
                 (!TE->hasState() ||
                  TE->getOpcode() != Instruction::ExtractElement) &&
@@ -15625,7 +15625,7 @@ bool BoUpSLP::isTreeTinyAndNotFullyVectorizable(bool ForReduction) const {
   if (!ForReduction && SLPCostThreshold.getNumOccurrences() &&
       VectorizableTree.size() <= Limit &&
       all_of(VectorizableTree,
-             [&](const std::unique_ptr<TreeEntry> &TE) {
+             [&](const std::shared_ptr<TreeEntry> &TE) {
                return (TE->isGather() &&
                        (!TE->hasState() ||
                         TE->getOpcode() != Instruction::ExtractElement) &&
@@ -15638,7 +15638,7 @@ bool BoUpSLP::isTreeTinyAndNotFullyVectorizable(bool ForReduction) const {
                            return isa<PoisonValue>(V) || MustGather.contains(V);
                          }))));
              }) &&
-      any_of(VectorizableTree, [&](const std::unique_ptr<TreeEntry> &TE) {
+      any_of(VectorizableTree, [&](const std::shared_ptr<TreeEntry> &TE) {
         return TE->State == TreeEntry::Vectorize &&
                TE->getOpcode() == Instruction::PHI;
       }))
@@ -15651,7 +15651,7 @@ bool BoUpSLP::isTreeTinyAndNotFullyVectorizable(bool ForReduction) const {
   constexpr int LimitTreeSize = 36;
   if (!ForReduction && !SLPCostThreshold.getNumOccurrences() &&
       all_of(VectorizableTree,
-             [&](const std::unique_ptr<TreeEntry> &TE) {
+             [&](const std::shared_ptr<TreeEntry> &TE) {
                if (!TE->isGather() && TE->hasState() &&
                    (TE->getOpcode() == Instruction::Load ||
                     TE->getOpcode() == Instruction::Store)) {
@@ -15693,7 +15693,7 @@ bool BoUpSLP::isTreeTinyAndNotFullyVectorizable(bool ForReduction) const {
       VectorizableTree.front()->State == TreeEntry::SplitVectorize &&
       VectorizableTree.size() >= Limit &&
       count_if(ArrayRef(VectorizableTree).drop_front(),
-               [&](const std::unique_ptr<TreeEntry> &TE) {
+               [&](const std::shared_ptr<TreeEntry> &TE) {
                  return !TE->isGather() && TE->UserTreeIndex.UserTE &&
                         TE->UserTreeIndex.UserTE->Idx == 0;
                }) == 2)
@@ -15709,7 +15709,7 @@ bool BoUpSLP::isTreeTinyAndNotFullyVectorizable(bool ForReduction) const {
       VectorizableTree[1]->getOpcode() == Instruction::PHI &&
       all_of(
           ArrayRef(VectorizableTree).drop_front(2),
-          [&](const std::unique_ptr<TreeEntry> &TE) { return TE->isGather(); }))
+          [&](const std::shared_ptr<TreeEntry> &TE) { return TE->isGather(); }))
     return true;
 
   // We can vectorize the tree if its size is greater than or equal to the
@@ -15731,7 +15731,7 @@ bool BoUpSLP::isTreeTinyAndNotFullyVectorizable(bool ForReduction) const {
        VectorizableTree.front()->getOpcode() != Instruction::PHI &&
        VectorizableTree.front()->getOpcode() != Instruction::GetElementPtr &&
        allSameBlock(VectorizableTree.front()->Scalars));
-  if (any_of(VectorizableTree, [&](const std::unique_ptr<TreeEntry> &TE) {
+  if (any_of(VectorizableTree, [&](const std::shared_ptr<TreeEntry> &TE) {
         return TE->isGather() && all_of(TE->Scalars, [&](Value *V) {
                  return isa<ExtractElementInst, Constant>(V) ||
                         (IsAllowedSingleBVNode &&
@@ -15766,7 +15766,7 @@ bool BoUpSLP::isTreeNotExtendable() const {
     if (VectorizableTree.front()->isNonPowOf2Vec() &&
         getCanonicalGraphSize() <= SmallTree &&
         count_if(ArrayRef(VectorizableTree).drop_front(getCanonicalGraphSize()),
-                 [](const std::unique_ptr<TreeEntry> &TE) {
+                 [](const std::shared_ptr<TreeEntry> &TE) {
                    return TE->isGather() && TE->hasState() &&
                           TE->getOpcode() == Instruction::Load &&
                           !allSameBlock(TE->Scalars);
@@ -17546,7 +17546,7 @@ BoUpSLP::isGatherShuffledEntry(
   if (TE == VectorizableTree.front().get() &&
       (!GatheredLoadsEntriesFirst.has_value() ||
        none_of(ArrayRef(VectorizableTree).drop_front(),
-               [](const std::unique_ptr<TreeEntry> &TE) {
+               [](const std::shared_ptr<TreeEntry> &TE) {
                  return !TE->isGather();
                })))
     return {};
@@ -18060,7 +18060,7 @@ Value *BoUpSLP::gather(
       Vec = CreateShuffle(Root, Vec, Mask);
       if (auto *OI = dyn_cast<Instruction>(OriginalRoot);
           OI && OI->use_empty() &&
-          none_of(VectorizableTree, [&](const std::unique_ptr<TreeEntry> &TE) {
+          none_of(VectorizableTree, [&](const std::shared_ptr<TreeEntry> &TE) {
             return TE->VectorizedValue == OI;
           }))
         eraseInstruction(OI);
@@ -18283,7 +18283,7 @@ public:
                     !R.areAllUsersVectorized(cast<Instruction>(U))) ||
                    (!UTEs.empty() &&
                     count_if(R.VectorizableTree,
-                             [&](const std::unique_ptr<TreeEntry> &TE) {
+                             [&](const std::shared_ptr<TreeEntry> &TE) {
                                return TE->UserTreeIndex.UserTE ==
                                           UTEs.front() &&
                                       is_contained(VL, EI);
@@ -18690,7 +18690,7 @@ ResTy BoUpSLP::processBuildVector(const TreeEntry *E, Type *ScalarTy,
       return false;
     if (!IsNotPoisonous) {
       auto *It = find_if(ArrayRef(VectorizableTree).drop_front(UserTE->Idx + 1),
-                         [=](const std::unique_ptr<TreeEntry> &TE) {
+                         [=](const std::shared_ptr<TreeEntry> &TE) {
                            return TE->UserTreeIndex.UserTE == UserTE &&
                                   TE->UserTreeIndex.EdgeIdx != EdgeIdx;
                          });
@@ -20303,7 +20303,7 @@ Value *BoUpSLP::vectorizeTree(
     scheduleBlock(*this, BSIter.second.get());
   // Cache last instructions for the nodes to avoid side effects, which may
   // appear during vectorization, like extra uses, etc.
-  for (const std::unique_ptr<TreeEntry> &TE : VectorizableTree) {
+  for (const std::shared_ptr<TreeEntry> &TE : VectorizableTree) {
     if (TE->isGather())
       continue;
     (void)getLastInstructionInBundle(TE.get());
@@ -20317,7 +20317,7 @@ Value *BoUpSLP::vectorizeTree(
 
   // Vectorize gather operands of the nodes with the external uses only.
   SmallVector<std::pair<TreeEntry *, Instruction *>> GatherEntries;
-  for (const std::unique_ptr<TreeEntry> &TE : VectorizableTree) {
+  for (const std::shared_ptr<TreeEntry> &TE : VectorizableTree) {
     if (TE->isGather() && !TE->VectorizedValue && TE->UserTreeIndex.UserTE &&
         TE->UserTreeIndex.UserTE->hasState() &&
         TE->UserTreeIndex.UserTE->State == TreeEntry::Vectorize &&
@@ -20339,7 +20339,7 @@ Value *BoUpSLP::vectorizeTree(
   }
   // Emit gathered loads first to emit better code for the users of those
   // gathered loads.
-  for (const std::unique_ptr<TreeEntry> &TE : VectorizableTree) {
+  for (const std::shared_ptr<TreeEntry> &TE : VectorizableTree) {
     if (GatheredLoadsEntriesFirst.has_value() &&
         TE->Idx >= *GatheredLoadsEntriesFirst && !TE->VectorizedValue &&
         (!TE->isGather() || TE->UserTreeIndex)) {
