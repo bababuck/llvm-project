@@ -23180,7 +23180,6 @@ SLPVectorizerPass::vectorizeStoreChain(ArrayRef<Value *> Chain, BoUpSLP &R,
                      << " and with tree size "
                      << NV("TreeSize", R.getTreeSize()));
 
-    R.vectorizeTree();
     return true;
   }
 
@@ -23483,6 +23482,7 @@ bool SLPVectorizerPass::vectorizeStores(
                     .first->getSecond()
                     .second = VF;
               } else if (*Res) {
+                R.vectorizeTree();
                 // Mark the vectorized stores so that we don't vectorize them
                 // again.
                 VectorizedStores.insert_range(Slice);
