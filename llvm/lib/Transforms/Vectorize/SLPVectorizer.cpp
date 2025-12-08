@@ -2091,10 +2091,7 @@ public:
     ExternalUses.clear();
     ExternalUsesAsOriginalScalar.clear();
     ExternalUsesWithNonUsers.clear();
-    for (auto &Iter : BlocksSchedules) {
-      BlockScheduling *BS = Iter.second.get();
-      BS->clear();
-    }
+    BlocksSchedules.clear();
     MinBWs.clear();
     ReductionBitWidth = 0;
     BaseGraphSize = 1;
@@ -4482,8 +4479,85 @@ private:
 
   /// -- Vectorization State --
   /// Holds all of the tree entries.
+  SmallVector<TreeEntry::VecTreeTy, 1> SavedVectorizableTrees;
+
+  /// Holds all of the tree entries of the current tree.
   TreeEntry::VecTreeTy VectorizableTree;
 
+  SmallVector<SmallDenseMap<Value *, SmallVector<TreeEntry *>>, 1>
+      SavedScalarToTreeEntries;
+  SmallVector<
+      SmallDenseMap<std::pair<const TreeEntry *, unsigned>, TreeEntry *>, 1>
+      SavedOperandsToTreeEntry;
+  SmallVector<SmallDenseMap<const TreeEntry *, WeakTrackingVH>, 1>
+      SavedEntryToLastInstruction;
+  SmallVector<SmallDenseMap<const Instruction *, Instruction *>, 1>
+      SavedLastInstructionToPos;
+  SmallVector<SmallDenseMap<TreeEntry *, StridedPtrInfo>, 1>
+      SavedTreeEntryToStridedPtrInfoMap;
+
+public:
+  void saveVectorizableTree() {
+    SavedMustGather.emplace_back(MustGather);
+    SavedNonScheduledFirst.emplace_back(NonScheduledFirst);
+    SavedValueToGatherNodes.emplace_back(ValueToGatherNodes);
+    SavedGatheredLoadsEntriesFirst.emplace_back(GatheredLoadsEntriesFirst);
+    SavedPostponedGathers.emplace_back(PostponedGathers);
+    SavedLoadEntriesToVectorize.emplace_back(LoadEntriesToVectorize);
+    SavedTreeEntryToStridedPtrInfoMap.emplace_back(
+        TreeEntryToStridedPtrInfoMap);
+    SavedBlocksSchedules.emplace_back(BlocksSchedules);
+    SavedEntryToLastInstruction.emplace_back(EntryToLastInstruction);
+    SavedLastInstructionToPos.emplace_back(LastInstructionToPos);
+    SavedVectorizableTrees.emplace_back(VectorizableTree);
+    SavedOperandsToTreeEntry.emplace_back(OperandsToTreeEntry);
+    SavedScalarToTreeEntries.emplace_back(ScalarToTreeEntries);
+  }
+
+  void vectorizeTrees() {
+    for (unsigned I = 0; I < SavedVectorizableTrees.size(); ++I) {
+      deleteTree();
+      MustGather = SavedMustGather[I];
+      NonScheduledFirst = SavedNonScheduledFirst[I];
+      ValueToGatherNodes = SavedValueToGatherNodes[I];
+      GatheredLoadsEntriesFirst = SavedGatheredLoadsEntriesFirst[I];
+      PostponedGathers = SavedPostponedGathers[I];
+      LoadEntriesToVectorize = SavedLoadEntriesToVectorize[I];
+      TreeEntryToStridedPtrInfoMap = SavedTreeEntryToStridedPtrInfoMap[I];
+      BlocksSchedules = SavedBlocksSchedules[I];
+      EntryToLastInstruction = SavedEntryToLastInstruction[I];
+      LastInstructionToPos = SavedLastInstructionToPos[I];
+      OperandsToTreeEntry = SavedOperandsToTreeEntry[I];
+      ScalarToTreeEntries = SavedScalarToTreeEntries[I];
+      VectorizableTree = SavedVectorizableTrees[I];
+      vectorizeTree();
+    }
+    deleteSaved();
+  }
+
+  void deleteSaved() {
+    deleteTree();
+    for (auto &BS : SavedBlocksSchedules) {
+      for (auto &Iter : BlocksSchedules) {
+        BlockScheduling *BS = Iter.second.get();
+        BS->clear();
+      }
+    }
+    SavedMustGather.clear();
+    SavedNonScheduledFirst.clear();
+    SavedValueToGatherNodes.clear();
+    SavedGatheredLoadsEntriesFirst.clear();
+    SavedPostponedGathers.clear();
+    SavedLoadEntriesToVectorize.clear();
+    SavedTreeEntryToStridedPtrInfoMap.clear();
+    SavedEntryToLastInstruction.clear();
+    SavedLastInstructionToPos.clear();
+    SavedVectorizableTrees.clear();
+    SavedOperandsToTreeEntry.clear();
+    SavedScalarToTreeEntries.clear();
+  }
+
+private:
 #ifndef NDEBUG
   /// Debug printer.
   LLVM_DUMP_METHOD void dumpVectorizableTree() const {
@@ -4583,9 +4657,11 @@ private:
 
   /// A list of scalars that we found that we need to keep as scalars.
   ValueSet MustGather;
+  SmallVector<ValueSet, 1> SavedMustGather;
 
   /// A set of first non-schedulable values.
   ValueSet NonScheduledFirst;
+  SmallVector<ValueSet, 1> SavedNonScheduledFirst;
 
   /// A map between the vectorized entries and the last instructions in the
   /// bundles. The bundles are built in use order, not in the def order of the
@@ -4603,21 +4679,26 @@ private:
   /// be emitted after the vector instruction emission process to correctly
   /// handle order of the vector instructions and shuffles.
   SetVector<const TreeEntry *> PostponedGathers;
+  SmallVector<SetVector<const TreeEntry *>, 1> SavedPostponedGathers;
 
   using ValueToGatherNodesMap =
       DenseMap<Value *, SmallSetVector<const TreeEntry *, 4>>;
   ValueToGatherNodesMap ValueToGatherNodes;
+  SmallVector<ValueToGatherNodesMap, 1> SavedValueToGatherNodes;
 
   /// A list of the load entries (node indices), which can be vectorized using
   /// strided or masked gather approach, but attempted to be represented as
   /// contiguous loads.
   SetVector<unsigned> LoadEntriesToVectorize;
 
+  SmallVector<SetVector<unsigned>, 1> SavedLoadEntriesToVectorize;
+
   /// true if graph nodes transforming mode is on.
   bool IsGraphTransformMode = false;
 
   /// The index of the first gathered load entry in the VectorizeTree.
   std::optional<unsigned> GatheredLoadsEntriesFirst;
+  SmallVector<std::optional<unsigned>, 1> SavedGatheredLoadsEntriesFirst;
 
   /// Maps compress entries to their mask data for the final codegen.
   SmallDenseMap<const TreeEntry *,
@@ -6009,7 +6090,9 @@ private:
   };
 
   /// Attaches the BlockScheduling structures to basic blocks.
-  MapVector<BasicBlock *, std::unique_ptr<BlockScheduling>> BlocksSchedules;
+  MapVector<BasicBlock *, std::shared_ptr<BlockScheduling>> BlocksSchedules;
+  SmallVector<MapVector<BasicBlock *, std::shared_ptr<BlockScheduling>>, 1>
+      SavedBlocksSchedules;
 
   /// Performs the "real" scheduling. Done before vectorization is actually
   /// performed in a basic block.
@@ -23482,7 +23565,7 @@ bool SLPVectorizerPass::vectorizeStores(
                     .first->getSecond()
                     .second = VF;
               } else if (*Res) {
-                R.vectorizeTree();
+                R.saveVectorizableTree();
                 // Mark the vectorized stores so that we don't vectorize them
                 // again.
                 VectorizedStores.insert_range(Slice);
@@ -23589,6 +23672,7 @@ bool SLPVectorizerPass::vectorizeStores(
         // attempts were unsuccessful because of the cost issues.
         CandidateVFs.push_back(VF);
       }
+      R.vectorizeTrees();
     }
   };
 
