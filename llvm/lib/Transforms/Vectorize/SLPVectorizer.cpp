@@ -20323,7 +20323,8 @@ Value *BoUpSLP::vectorizeTree(
     scheduleBlock(*this, BSIter.second.get());
   // Cache last instructions for the nodes to avoid side effects, which may
   // appear during vectorization, like extra uses, etc.
-  for (const std::unique_ptr<TreeEntry> &TE : VectorizableTree.back()) {
+  for (auto &VT : VectorizableTree)
+  for (const std::unique_ptr<TreeEntry> &TE : VT) {
     if (TE->isGather())
       continue;
     (void)getLastInstructionInBundle(TE.get());
@@ -20337,7 +20338,8 @@ Value *BoUpSLP::vectorizeTree(
 
   // Vectorize gather operands of the nodes with the external uses only.
   SmallVector<std::pair<TreeEntry *, Instruction *>> GatherEntries;
-  for (const std::unique_ptr<TreeEntry> &TE : VectorizableTree.back()) {
+  for (auto &VT : VectorizableTree)
+  for (const std::unique_ptr<TreeEntry> &TE : VT) {
     if (TE->isGather() && !TE->VectorizedValue && TE->UserTreeIndex.UserTE &&
         TE->UserTreeIndex.UserTE->hasState() &&
         TE->UserTreeIndex.UserTE->State == TreeEntry::Vectorize &&
@@ -20359,7 +20361,8 @@ Value *BoUpSLP::vectorizeTree(
   }
   // Emit gathered loads first to emit better code for the users of those
   // gathered loads.
-  for (const std::unique_ptr<TreeEntry> &TE : VectorizableTree.back()) {
+  for (auto &VT : VectorizableTree)
+  for (const std::unique_ptr<TreeEntry> &TE : VT) {
     if (GatheredLoadsEntriesFirst.has_value() &&
         TE->Idx >= *GatheredLoadsEntriesFirst && !TE->VectorizedValue &&
         (!TE->isGather() || TE->UserTreeIndex)) {
@@ -20369,7 +20372,8 @@ Value *BoUpSLP::vectorizeTree(
       (void)vectorizeTree(TE.get());
     }
   }
-  (void)vectorizeTree(VectorizableTree.back()[0].get());
+  for (auto &VT : VectorizableTree)
+    (void)vectorizeTree(VT[0].get());
   // Run through the list of postponed gathers and emit them, replacing the temp
   // emitted allocas with actual vector instructions.
   ArrayRef<const TreeEntry *> PostponedNodes = PostponedGathers.getArrayRef();
@@ -20867,9 +20871,11 @@ Value *BoUpSLP::vectorizeTree(
     CSEBlocks.insert(LastInsert->getParent());
   }
 
-  SmallVector<Instruction *> RemovedInsts;
+  SmallVector<SmallVector<Instruction *>> RemovedInsts;
   // For each vectorized value:
-  for (auto &TEPtr : VectorizableTree.back()) {
+  for (auto &VT : VectorizableTree) {
+    RemovedInsts.emplace_back();
+  for (auto &TEPtr : VT) {
     TreeEntry *Entry = TEPtr.get();
 
     // No need to handle users of gathered values.
@@ -20907,34 +20913,36 @@ Value *BoUpSLP::vectorizeTree(
 #endif
       LLVM_DEBUG(dbgs() << "SLP: \tErasing scalar:" << *Scalar << ".\n");
       auto *I = cast<Instruction>(Scalar);
-      RemovedInsts.push_back(I);
+      RemovedInsts.back().push_back(I);
     }
-  }
+  }}
 
   // Merge the DIAssignIDs from the about-to-be-deleted instructions into the
   // new vector instruction.
-  if (auto *V = dyn_cast<Instruction>(VectorizableTree.back()[0]->VectorizedValue))
-    V->mergeDIAssignID(RemovedInsts);
+  for (unsigned Idx = 0; Idx < VectorizableTree.size(); ++Idx)
+    if (auto *V = dyn_cast<Instruction>(VectorizableTree[Idx][0]->VectorizedValue))
+      V->mergeDIAssignID(RemovedInsts[Idx]);
 
   // Clear up reduction references, if any.
   if (UserIgnoreList) {
-    for (Instruction *I : RemovedInsts) {
+    for (unsigned Idx = 0; Idx < VectorizableTree.size(); ++Idx)
+    for (Instruction *I : RemovedInsts[Idx]) {
       const TreeEntry *IE = getTreeEntries(I).front();
       if (IE->Idx != 0 &&
-          !(VectorizableTree.back().front()->isGather() && IE->UserTreeIndex &&
+          !(VectorizableTree[Idx].front()->isGather() && IE->UserTreeIndex &&
             (ValueToGatherNodes.lookup(I).contains(
-                 VectorizableTree.back().front().get()) ||
-             (IE->UserTreeIndex.UserTE == VectorizableTree.back().front().get() &&
+                 VectorizableTree[Idx].front().get()) ||
+             (IE->UserTreeIndex.UserTE == VectorizableTree[Idx].front().get() &&
               IE->UserTreeIndex.EdgeIdx == UINT_MAX))) &&
-          !(VectorizableTree.back().front()->State == TreeEntry::SplitVectorize &&
+          !(VectorizableTree[Idx].front()->State == TreeEntry::SplitVectorize &&
             IE->UserTreeIndex &&
-            is_contained(VectorizableTree.back().front()->Scalars, I)) &&
+            is_contained(VectorizableTree[Idx].front()->Scalars, I)) &&
           !(GatheredLoadsEntriesFirst.has_value() &&
             IE->Idx >= *GatheredLoadsEntriesFirst &&
-            VectorizableTree.back().front()->isGather() &&
-            is_contained(VectorizableTree.back().front()->Scalars, I)) &&
-          !(!VectorizableTree.back().front()->isGather() &&
-            VectorizableTree.back().front()->isCopyableElement(I)))
+            VectorizableTree[Idx].front()->isGather() &&
+            is_contained(VectorizableTree[Idx].front()->Scalars, I)) &&
+          !(!VectorizableTree[Idx].front()->isGather() &&
+            VectorizableTree[Idx].front()->isCopyableElement(I)))
         continue;
       SmallVector<SelectInst *> LogicalOpSelects;
       I->replaceUsesWithIf(PoisonValue::get(I->getType()), [&](Use &U) {
@@ -20959,13 +20967,16 @@ Value *BoUpSLP::vectorizeTree(
   // cache correctness.
   // NOTE: removeInstructionAndOperands only marks the instruction for deletion
   // - instructions are not deleted until later.
-  removeInstructionsAndOperands(ArrayRef(RemovedInsts), VectorValuesAndScales);
+  for (unsigned Idx = 0; Idx < VectorizableTree.size(); ++Idx)
+    removeInstructionsAndOperands(ArrayRef(RemovedInsts[Idx]), VectorValuesAndScales);
 
   Builder.ClearInsertionPoint();
   InstrElementSize.clear();
 
-  const TreeEntry &RootTE = *VectorizableTree.back().front();
-  Value *Vec = RootTE.VectorizedValue;
+  Value *Vec = nullptr;
+  for (auto &VT : VectorizableTree) {
+  const TreeEntry &RootTE = *VT.front();
+  Vec = RootTE.VectorizedValue;
   if (auto It = MinBWs.find(&RootTE); ReductionBitWidth != 0 &&
                                       It != MinBWs.end() &&
                                       ReductionBitWidth != It->second.first) {
@@ -20977,6 +20988,7 @@ Value *BoUpSLP::vectorizeTree(
         VectorType::get(Builder.getIntNTy(ReductionBitWidth),
                         cast<VectorType>(Vec->getType())->getElementCount()),
         It->second.second);
+  }
   }
   return Vec;
 }
