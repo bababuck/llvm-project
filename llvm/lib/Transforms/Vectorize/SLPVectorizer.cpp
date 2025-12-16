@@ -23498,9 +23498,34 @@ bool SLPVectorizerPass::vectorizeStores(
                   continue;
                 }
               }
-              unsigned TreeSize;
-              std::optional<bool> Res =
-                  vectorizeStoreChain(Slice, R, SliceStartIdx, MinVF, TreeSize);
+              unsigned TreeSize = UINT_MAX;
+              std::optional<bool> Res;
+              if (Slice.size() > std::max(MaxVF, NonPowerOf2VF)) {
+                unsigned EltCnt = Slice.size();
+                auto StartIt = Slice.begin();
+                Res = true;
+                while (EltCnt) {
+                  unsigned SubLen = std::min(MaxVF, EltCnt);
+                  EltCnt -= SubLen;
+                  errs() << "HELP " << SubLen << "\n";
+                  SmallVector<Value *> SubSlice(StartIt, StartIt + SubLen);
+                  unsigned SubTreeSize;
+                  std::optional<bool> SubRes =
+                      vectorizeStoreChain(SubSlice, R, SliceStartIdx, MinVF, SubTreeSize);
+                  TreeSize = std::min(TreeSize, SubTreeSize);
+                  if (!SubRes) {
+                    Res = std::nullopt;
+                    break;
+                  }
+                  if (!SubRes) {
+                    Res = false;
+                    break;
+                  }
+                }
+              } else {
+                errs() << "HERE\n";
+                Res = vectorizeStoreChain(Slice, R, SliceStartIdx, MinVF, TreeSize);
+              }
               if (Res && *Res) {
                 if (TreeSize) {
                   InstructionCost Cost = R.getTreeCost();
