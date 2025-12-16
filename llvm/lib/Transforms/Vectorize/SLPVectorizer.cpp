@@ -23426,7 +23426,8 @@ bool SLPVectorizerPass::vectorizeStores(
       }
 
       SmallVector<unsigned> CandidateVFs;
-      for (unsigned VF = std::max(MaxVF, NonPowerOf2VF); VF >= MinVF;
+      unsigned PowerOf2Elts = bit_floor(Operands.size());
+      for (unsigned VF = std::max(PowerOf2Elts, NonPowerOf2VF); VF >= MinVF;
            VF = divideCeil(VF, 2))
         CandidateVFs.push_back(VF);
 
@@ -23507,15 +23508,18 @@ bool SLPVectorizerPass::vectorizeStores(
                 unsigned EltCnt = Slice.size();
                 auto StartIt = Slice.begin();
                 Res = true;
+                bool DeleteTree = true;
                 while (EltCnt) {
                   unsigned SubLen = std::min(MaxVF, EltCnt);
                   EltCnt -= SubLen;
-                  errs() << "HELP " << SubLen << "\n";
+                  errs() << SubLen << "\n";
                   SmallVector<Value *> SubSlice(StartIt, StartIt + SubLen);
                   unsigned SubTreeSize;
                   std::optional<bool> SubRes =
-                      vectorizeStoreChain(SubSlice, R, SliceStartIdx, MinVF, SubTreeSize);
+                      vectorizeStoreChain(SubSlice, R, SliceStartIdx, MinVF, SubTreeSize, DeleteTree);
+                  DeleteTree = false;
                   TreeSize = std::min(TreeSize, SubTreeSize);
+                  StartIt += SubLen;
                   if (!SubRes) {
                     Res = std::nullopt;
                     break;
