@@ -4619,7 +4619,7 @@ private:
   /// A list of the load entries (node indices), which can be vectorized using
   /// strided or masked gather approach, but attempted to be represented as
   /// contiguous loads.
-  SetVector<unsigned> LoadEntriesToVectorize;
+  SetVector<std::pair<unsigned, unsigned>> LoadEntriesToVectorize;
 
   /// true if graph nodes transforming mode is on.
   bool IsGraphTransformMode = false;
@@ -7139,15 +7139,20 @@ BoUpSLP::LoadsState BoUpSLP::canVectorizeLoads(
   // treats loading/storing it as an i8 struct. If we vectorize loads/stores
   // from such a struct, we read/write packed bits disagreeing with the
   // unvectorized version.
+  errs() << "CANVEC\n";
   if (BestVF)
     *BestVF = 0;
-  if (areKnownNonVectorizableLoads(VL))
+  if (areKnownNonVectorizableLoads(VL)) {
+    errs() << "SCATTER2\n";
     return LoadsState::Gather;
+  }
   Type *ScalarTy = VL0->getType();
 
-  if (DL->getTypeSizeInBits(ScalarTy) != DL->getTypeAllocSizeInBits(ScalarTy))
+  if (DL->getTypeSizeInBits(ScalarTy) != DL->getTypeAllocSizeInBits(ScalarTy)) {
+    errs() << "SCATTER3\n";
     return LoadsState::Gather;
-
+  }
+      errs() << "SCATTER00\n";
   // Make sure all loads in the bundle are simple - we can't vectorize
   // atomic or volatile loads.
   PointerOps.clear();
@@ -7156,8 +7161,10 @@ BoUpSLP::LoadsState BoUpSLP::canVectorizeLoads(
   auto *POIter = PointerOps.begin();
   for (Value *V : VL) {
     auto *L = dyn_cast<LoadInst>(V);
-    if (!L || !L->isSimple())
+    if (!L || !L->isSimple()) {
+      errs() << "SCATTER4\n";
       return LoadsState::Gather;
+    }
     *POIter = L->getPointerOperand();
     ++POIter;
   }
@@ -7165,7 +7172,7 @@ BoUpSLP::LoadsState BoUpSLP::canVectorizeLoads(
   Order.clear();
   // Check the order of pointer operands or that all pointers are the same.
   bool IsSorted = sortPtrAccesses(PointerOps, ScalarTy, *DL, *SE, Order);
-
+      errs() << "SCATTER1\n";
   auto *VecTy = getWidenedType(ScalarTy, Sz);
   Align CommonAlignment = computeCommonAlignment<LoadInst>(VL);
   if (!IsSorted) {
@@ -7174,13 +7181,17 @@ BoUpSLP::LoadsState BoUpSLP::canVectorizeLoads(
       return LoadsState::StridedVectorize;
 
     if (!TTI->isLegalMaskedGather(VecTy, CommonAlignment) ||
-        TTI->forceScalarizeMaskedGather(VecTy, CommonAlignment))
+        TTI->forceScalarizeMaskedGather(VecTy, CommonAlignment)) {
+      errs() << "SCATTER5\n";
       return LoadsState::Gather;
+    }
 
     if (!all_of(PointerOps, [&](Value *P) {
           return arePointersCompatible(P, PointerOps.front(), *TLI);
-        }))
+    })) {
+      errs() << "SCATTER6\n";
       return LoadsState::Gather;
+    }
 
   } else {
     Value *Ptr0;
@@ -7210,9 +7221,12 @@ BoUpSLP::LoadsState BoUpSLP::canVectorizeLoads(
                                        *Diff, Ptr0, PtrN, SPtrInfo))
       return LoadsState::StridedVectorize;
   }
+        errs() << "SCATTER02\n";
   if (!TTI->isLegalMaskedGather(VecTy, CommonAlignment) ||
-      TTI->forceScalarizeMaskedGather(VecTy, CommonAlignment))
+      TTI->forceScalarizeMaskedGather(VecTy, CommonAlignment)) {
+    errs() << "SCATTER7\n";
     return LoadsState::Gather;
+  }
   // Correctly identify compare the cost of loads + shuffles rather than
   // strided/masked gather loads. Returns true if vectorized + shuffles
   // representation is better than just gather.
@@ -7293,6 +7307,7 @@ BoUpSLP::LoadsState BoUpSLP::canVectorizeLoads(
         ArrayRef<Value *> Slice = VL.slice(Cnt, VF);
         SmallVector<unsigned> Order;
         SmallVector<Value *> PointerOps;
+        errs() << "CANVEC2\n";
         LoadsState LS = canVectorizeLoads(Slice, Slice.front(), Order,
                                           PointerOps, SPtrInfo, BestVF,
                                           /*TryRecursiveCheck=*/false);
@@ -7305,6 +7320,7 @@ BoUpSLP::LoadsState BoUpSLP::canVectorizeLoads(
           DemandedElts.setBits(Cnt, Cnt + VF);
           continue;
         }
+        errs() << "V0\n";
         // If need the reorder - consider as high-cost masked gather for now.
         if ((LS == LoadsState::Vectorize ||
              LS == LoadsState::StridedVectorize ||
@@ -7417,6 +7433,7 @@ BoUpSLP::LoadsState BoUpSLP::canVectorizeLoads(
     }
     return MaskedGatherCost - GatherCost >= -SLPCostThreshold;
   };
+        errs() << "SCATTER02\n";
   // TODO: need to improve analysis of the pointers, if not all of them are
   // GEPs or have > 2 operands, we end up with a gather node, which just
   // increases the cost.
@@ -7425,6 +7442,7 @@ BoUpSLP::LoadsState BoUpSLP::canVectorizeLoads(
       L && Sz > 2 && static_cast<unsigned>(count_if(PointerOps, [L](Value *V) {
                        return L->isLoopInvariant(V);
                      })) <= Sz / 2;
+  errs() << ProfitableGatherPointers << "\n";
   if (ProfitableGatherPointers || all_of(PointerOps, [](Value *P) {
         auto *GEP = dyn_cast<GetElementPtrInst>(P);
         return (!GEP && doesNotNeedToBeScheduled(P)) ||
@@ -7436,11 +7454,14 @@ BoUpSLP::LoadsState BoUpSLP::canVectorizeLoads(
     // If masked gather cost is higher - better to vectorize, so
     // consider it as a gather node. It will be better estimated
     // later.
+    errs() << "HELP\n";
     if (!TryRecursiveCheck || !CheckForShuffledLoads(CommonAlignment, BestVF,
                                                      ProfitableGatherPointers))
+      errs() << "SCATTER0\n";
       return LoadsState::ScatterVectorize;
   }
 
+      errs() << "SCATTER1\n";
   return LoadsState::Gather;
 }
 
@@ -7567,7 +7588,7 @@ BoUpSLP::findPartiallyOrderedLoads(const BoUpSLP::TreeEntry &TE) {
   }
 
   BoUpSLP::OrdersType Order;
-  if (!LoadEntriesToVectorize.contains(TE.Idx) &&
+  if (!LoadEntriesToVectorize.contains({TE.CntIdx, TE.Idx}) &&
       clusterSortPtrAccesses(Ptrs, BBs, ScalarTy, *DL, *SE, Order))
     return std::move(Order);
   return std::nullopt;
@@ -9371,11 +9392,11 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
         SmallVector<SmallVector<std::pair<LoadInst *, int64_t>>>, 8>
         &GatheredLoads) {
   GatheredLoadsEntriesFirst = VectorizableTree.back().size();
-
+  errs() << "HERE2\n";
   SmallVector<SmallPtrSet<const Value *, 4>> LoadSetsToVectorize(
       LoadEntriesToVectorize.size());
-  for (auto [Idx, Set] : zip(LoadEntriesToVectorize, LoadSetsToVectorize))
-    Set.insert_range(VectorizableTree.back()[Idx]->Scalars);
+  for (auto [P, Set] : zip(LoadEntriesToVectorize, LoadSetsToVectorize))
+    Set.insert_range(VectorizableTree[P.first][P.second]->Scalars);
 
   // Sort loads by distance.
   auto LoadSorter = [](const std::pair<LoadInst *, int64_t> &L1,
@@ -9396,6 +9417,7 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
                                     BoUpSLP::ValueSet &VectorizedLoads,
                                     SmallVectorImpl<LoadInst *> &NonVectorized,
                                     bool Final, unsigned MaxVF) {
+    errs() << MaxVF << "MAX\n";
     SmallVector<std::pair<ArrayRef<Value *>, LoadsState>> Results;
     unsigned StartIdx = 0;
     SmallVector<int> CandidateVFs;
@@ -9415,6 +9437,8 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
 
     unsigned BestVF = Final ? CandidateVFs.back() : 0;
     for (unsigned NumElts : CandidateVFs) {
+      errs() << "TRY\n";
+      errs() << NumElts << "\n";
       if (Final && NumElts > BestVF)
         continue;
       SmallVector<unsigned> MaskedGatherVectorized;
@@ -9481,7 +9505,9 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
               hasFullVectorsOrPowerOf2(*TTI, Slice.front()->getType(),
                                        Slice.size());
         }
+        errs() << "HH\n";
         if (AllowToVectorize) {
+          errs() << NumElts << "\n";
           SmallVector<Value *> PointerOps;
           OrdersType CurrentOrder;
           // Try to build vector load.
@@ -9544,6 +9570,13 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
       [&, &TTI = *TTI](
           ArrayRef<SmallVector<std::pair<LoadInst *, int64_t>>> GatheredLoads,
           bool Final = false) {
+        errs() << "HERE4\n";
+        for (auto &E : GatheredLoads) {
+        errs() << "HERE5\n";
+      for (auto [LI, _] : E)
+        LI->dump();
+        }
+
         SmallVector<LoadInst *> NonVectorized;
         for (ArrayRef<std::pair<LoadInst *, int64_t>> LoadsDists :
              GatheredLoads) {
@@ -9591,6 +9624,7 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
           SmallVector<std::pair<ArrayRef<Value *>, LoadsState>> Results =
               GetVectorizedRanges(Loads, VectorizedLoads, SortedNonVectorized,
                                   Final, MaxConsecutiveDistance);
+          errs() << Results.size() << "HEHE\n";
           if (!Results.empty() && !SortedNonVectorized.empty() &&
               OriginalLoads.size() == Loads.size() &&
               MaxConsecutiveDistance == Loads.size() &&
@@ -9675,6 +9709,7 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
                   }
                 }
               }
+              errs() << "HEHE0\n";
               DeinterleavedNodes.clear();
               // Check if the large load represents interleaved load operation.
               if (InterleavedLoadsDistance.value_or(0) > 1 &&
@@ -9699,6 +9734,7 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
                   InterleaveFactor = 0;
                 }
               }
+              errs() << "HEHE1\n";
               // Cannot represent the loads as consecutive vectorizable nodes -
               // just exit.
               unsigned ConsecutiveNodesSize = 0;
@@ -9711,7 +9747,7 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
                            if (It == Slice.end())
                              return false;
                            const TreeEntry &TE =
-                               *VectorizableTree.back()[std::get<0>(P)];
+                               *VectorizableTree[std::get<0>(P).first][std::get<0>(P).second];
                            ArrayRef<Value *> VL = TE.Scalars;
                            OrdersType Order;
                            SmallVector<Value *> PointerOps;
@@ -9728,6 +9764,7 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
                                   Slice.slice(Start, VL.size()) != VL;
                          }))
                 continue;
+              errs() << "HEHE1.5\n";
               // Try to build long masked gather loads.
               UserMaxVF = bit_ceil(UserMaxVF);
               if (InterleaveFactor == 0 &&
@@ -9745,25 +9782,35 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
               if (Slice.size() != ConsecutiveNodesSize)
                 MaxVF = std::min<unsigned>(MaxVF, UserMaxVF);
             }
+            errs() << "HEHE2\n";
             for (unsigned VF = MaxVF; VF >= 2; VF /= 2) {
               bool IsVectorized = true;
+              errs() << "HEHE2.1\n";
               for (unsigned I = 0, E = Slice.size(); I < E; I += VF) {
+              errs() << "HEHE2.2\n";
                 ArrayRef<Value *> SubSlice =
                     Slice.slice(I, std::min(VF, E - I));
                 if (isVectorized(SubSlice.front()))
                   continue;
+              errs() << "HEHE2.3\n";
                 // Check if the subslice is to be-vectorized entry, which is not
                 // equal to entry.
                 if (any_of(zip(LoadEntriesToVectorize, LoadSetsToVectorize),
                            [&](const auto &P) {
+                             errs() << SubSlice.equals(
+                                        VectorizableTree[std::get<0>(P).first][std::get<0>(P).second]
+                                        ->Scalars) << "\n";
+                             errs() << set_is_subset(SubSlice, std::get<1>(P)) << "\n";
                              return !SubSlice.equals(
-                                        VectorizableTree.back()[std::get<0>(P)]
+                                        VectorizableTree[std::get<0>(P).first][std::get<0>(P).second]
                                             ->Scalars) &&
                                     set_is_subset(SubSlice, std::get<1>(P));
                            }))
                   continue;
+              errs() << "HEHE2.5\n";
                 unsigned Sz = VectorizableTree.back().size();
                 buildTreeRec(SubSlice, 0, EdgeInfo(), InterleaveFactor);
+                errs() << Sz << " " << VectorizableTree.back().size() << "SIZE\n";
                 if (Sz == VectorizableTree.back().size()) {
                   IsVectorized = false;
                   // Try non-interleaved vectorization with smaller vector
@@ -9781,9 +9828,11 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
           }
           NonVectorized.append(SortedNonVectorized);
         }
+        errs() << "NONVEC" << NonVectorized.size() << "\n";
         return NonVectorized;
       };
   for (const auto &GLs : GatheredLoads) {
+    errs() << "HERE3\n";
     const auto &Ref = GLs.second;
     SmallVector<LoadInst *> NonVectorized = ProcessGatheredLoads(Ref);
     if (!Ref.empty() && !NonVectorized.empty() &&
@@ -9802,13 +9851,19 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
                                         FinalGatheredLoads,
                                         /*AddNew=*/false);
       }
+      for (auto &E : FinalGatheredLoads)
+      for (auto [LI, _] : E)
+        LI->dump();
       // Final attempt to vectorize non-vectorized loads.
       (void)ProcessGatheredLoads(FinalGatheredLoads, /*Final=*/true);
     }
   }
+  errs() << "HERE6\n";
   // Try to vectorize postponed load entries, previously marked as gathered.
-  for (unsigned Idx : LoadEntriesToVectorize) {
-    const TreeEntry &E = *VectorizableTree.back()[Idx];
+  for (auto [CntIdx, Idx] : LoadEntriesToVectorize) {
+    const TreeEntry &E = *VectorizableTree[CntIdx][Idx];
+    errs() << "HH2\n";
+    E.dump();
     SmallVector<Value *> GatheredScalars(E.Scalars.begin(), E.Scalars.end());
     // Avoid reordering, if possible.
     if (!E.ReorderIndices.empty()) {
@@ -9818,6 +9873,7 @@ void BoUpSLP::tryToVectorizeGatheredLoads(
       inversePermutation(E.ReorderIndices, ReorderMask);
       reorderScalars(GatheredScalars, ReorderMask);
     }
+    errs() << "HH3\n";
     buildTreeRec(GatheredScalars, 0, EdgeInfo());
   }
   // If no new entries created, consider it as no gathered loads entries must be
@@ -10097,6 +10153,10 @@ BoUpSLP::TreeEntry::EntryState BoUpSLP::getScalarsVectorizationState(
     const InstructionsState &S, ArrayRef<Value *> VL,
     bool IsScatterVectorizeUserTE, OrdersType &CurrentOrder,
     SmallVectorImpl<Value *> &PointerOps, StridedPtrInfo &SPtrInfo) {
+  errs() << "VECSTATE\n";
+  S.getMainOp()->dump();
+  for (auto *V : VL)
+    V->dump();
   assert(S.getMainOp() &&
          "Expected instructions with same/alternate opcodes only.");
 
@@ -10187,6 +10247,7 @@ BoUpSLP::TreeEntry::EntryState BoUpSLP::getScalarsVectorizationState(
     // treats loading/storing it as an i8 struct. If we vectorize loads/stores
     // from such a struct, we read/write packed bits disagreeing with the
     // unvectorized version.
+    errs() << "VEC@\n";
     auto IsGatheredNode = [&]() {
       if (!GatheredLoadsEntriesFirst)
         return false;
@@ -10198,13 +10259,15 @@ BoUpSLP::TreeEntry::EntryState BoUpSLP::getScalarsVectorizationState(
         });
       });
     };
+    errs() << "canVec\n";
     switch (canVectorizeLoads(VL, VL0, CurrentOrder, PointerOps, SPtrInfo)) {
     case LoadsState::Vectorize:
       return TreeEntry::Vectorize;
     case LoadsState::CompressVectorize:
       if (!IsGraphTransformMode && !VectorizableTree.back().empty()) {
         // Delay slow vectorized nodes for better vectorization attempts.
-        LoadEntriesToVectorize.insert(VectorizableTree.back().size());
+        LoadEntriesToVectorize.insert({VectorizableTree.size() - 1, VectorizableTree.back().size()});
+        errs() << "IN06\n";
         return TreeEntry::NeedToGather;
       }
       return IsGatheredNode() ? TreeEntry::NeedToGather
@@ -10212,7 +10275,8 @@ BoUpSLP::TreeEntry::EntryState BoUpSLP::getScalarsVectorizationState(
     case LoadsState::ScatterVectorize:
       if (!IsGraphTransformMode && !VectorizableTree.back().empty()) {
         // Delay slow vectorized nodes for better vectorization attempts.
-        LoadEntriesToVectorize.insert(VectorizableTree.back().size());
+        LoadEntriesToVectorize.insert({VectorizableTree.size() - 1, VectorizableTree.back().size()});
+        errs() << "IN1\n";
         return TreeEntry::NeedToGather;
       }
       return IsGatheredNode() ? TreeEntry::NeedToGather
@@ -10220,8 +10284,9 @@ BoUpSLP::TreeEntry::EntryState BoUpSLP::getScalarsVectorizationState(
     case LoadsState::StridedVectorize:
       if (!IsGraphTransformMode && VectorizableTree.back().size() > 1) {
         // Delay slow vectorized nodes for better vectorization attempts.
-        LoadEntriesToVectorize.insert(VectorizableTree.back().size());
-        return TreeEntry::NeedToGather;
+        LoadEntriesToVectorize.insert({VectorizableTree.size() - 1, VectorizableTree.back().size()});
+        errs() << "IN2\n";
+       return TreeEntry::NeedToGather;
       }
       return IsGatheredNode() ? TreeEntry::NeedToGather
                               : TreeEntry::StridedVectorize;
@@ -11411,6 +11476,7 @@ BoUpSLP::ScalarsVectorizationLegality BoUpSLP::getScalarsVectorizationLegality(
       isa<ScalableVectorType>(
           cast<ExtractElementInst>(S.getMainOp())->getVectorOperandType())) {
     LLVM_DEBUG(dbgs() << "SLP: Gathering due to scalable vector type.\n");
+    errs() << "LL\n";
     return ScalarsVectorizationLegality(S, /*IsLegal=*/false);
   }
 
@@ -11676,10 +11742,11 @@ void BoUpSLP::buildTreeRec(ArrayRef<Value *> VLRef, unsigned Depth,
     }
     S = Legality.getInstructionsState();
   }
-
+  errs() << "B0\n";
   // FIXME: investigate if there are profitable cases for VL.size() <= 4.
   if (S.isAltShuffle() && TrySplitNode(S))
     return;
+  errs() << "B1\n";
 
   // Check that every instruction appears once in this bundle.
   if (!tryToFindDuplicates(VL, ReuseShuffleIndices, *TTI, *TLI, S, UserTreeIdx,
@@ -11687,6 +11754,7 @@ void BoUpSLP::buildTreeRec(ArrayRef<Value *> VLRef, unsigned Depth,
     newGatherTreeEntry(VL, S, UserTreeIdx, ReuseShuffleIndices);
     return;
   }
+  errs() << "B2\n";
 
   // Perform specific checks for each particular instruction kind.
   bool IsScatterVectorizeUserTE =
@@ -11697,10 +11765,12 @@ void BoUpSLP::buildTreeRec(ArrayRef<Value *> VLRef, unsigned Depth,
   StridedPtrInfo SPtrInfo;
   TreeEntry::EntryState State = getScalarsVectorizationState(
       S, VL, IsScatterVectorizeUserTE, CurrentOrder, PointerOps, SPtrInfo);
+  errs() << IsScatterVectorizeUserTE << "\n";
   if (State == TreeEntry::NeedToGather) {
     newGatherTreeEntry(VL, S, UserTreeIdx, ReuseShuffleIndices);
     return;
   }
+  errs() << "B3\n";
 
   Instruction *VL0 = S.getMainOp();
   BasicBlock *BB = VL0->getParent();
@@ -11729,6 +11799,8 @@ void BoUpSLP::buildTreeRec(ArrayRef<Value *> VLRef, unsigned Depth,
       registerNonVectorizableLoads(ArrayRef(VL));
     return;
   }
+  errs() << "B4\n";
+
   InstructionsCompatibilityAnalysis Analysis(*DT, *DL, *TTI, *TLI);
   SmallVector<ValueList> Operands = Analysis.buildOperands(S, VL);
   ScheduleBundle Empty;
@@ -13173,7 +13245,7 @@ void BoUpSLP::transformNodes() {
       unsigned MinVF = getMinVF(2 * Sz);
       // Do not try partial vectorization for small nodes (<= 2), nodes with the
       // same opcode and same parent block or all constants.
-      if (VL.size() <= 2 || LoadEntriesToVectorize.contains(Idx) ||
+      if (VL.size() <= 2 || LoadEntriesToVectorize.contains({VectorizableTree.size() - 1, Idx}) ||
           !(!E.hasState() || E.getOpcode() == Instruction::Load ||
             // We use allSameOpcode instead of isAltShuffle because we don't
             // want to use interchangeable instruction here.
@@ -13494,8 +13566,14 @@ void BoUpSLP::transformNodes() {
                  SmallVector<SmallVector<std::pair<LoadInst *, int64_t>>>, 8>
       GatheredLoads;
 
-  for (std::unique_ptr<TreeEntry> &TE : VectorizableTree.back()) {
+    errs() << "HERE\n";
+  for (auto &VT : VectorizableTree) {
+    for (std::unique_ptr<TreeEntry> &TE : VT) {
     TreeEntry &E = *TE;
+    TE->dump();
+    errs() << E.isGather() << E.hasState() << "\n";
+    if (E.hasState())
+      errs() << (E.getOpcode() == Instruction::Load) << "\n";
     if (E.isGather() &&
         ((E.hasState() && E.getOpcode() == Instruction::Load) ||
          (!E.hasState() && any_of(E.Scalars,
@@ -13505,12 +13583,20 @@ void BoUpSLP::transformNodes() {
                                            !isDeleted(cast<Instruction>(V));
                                   }))) &&
         !isSplat(E.Scalars)) {
+        errs() << "HELL\n";
+        errs() << E.Scalars.size() << "\n";
       for (Value *V : E.Scalars) {
+        V->dump();
         auto *LI = dyn_cast<LoadInst>(V);
         if (!LI)
           continue;
+        errs() << isDeleted(LI) << isVectorized(LI) << !LI->isSimple() << "\n";
         if (isDeleted(LI) || isVectorized(LI) || !LI->isSimple())
           continue;
+        errs() << "HELP\n";
+        errs() << LI->getParent() << "\n";
+        getUnderlyingObject(LI->getPointerOperand(), RecursionMaxDepth)->dump();
+        LI->getType()->dump();
         gatherPossiblyVectorizableLoads(
             *this, V, *DL, *SE, *TTI,
             GatheredLoads[std::make_tuple(
@@ -13519,7 +13605,7 @@ void BoUpSLP::transformNodes() {
                 LI->getType())]);
       }
     }
-  }
+  }}
   // Try to vectorize gathered loads if this is not just a gather of loads.
   if (!GatheredLoads.empty())
     tryToVectorizeGatheredLoads(GatheredLoads);
@@ -20884,6 +20970,10 @@ Value *BoUpSLP::vectorizeTree(
     CSEBlocks.insert(LastInsert->getParent());
   }
 
+  dyn_cast<Instruction>(VectorizableTree[0][0]->Scalars[0])->getParent()->dump();
+    for (auto &VT : VectorizableTree)
+      for (auto &V : VT)
+        V->dump();
   SmallVector<SmallVector<Instruction *>> RemovedInsts;
   // For each vectorized value:
   for (auto &VT : VectorizableTree) {
@@ -23205,7 +23295,6 @@ SLPVectorizerPass::vectorizeStoreChain(ArrayRef<Value *> Chain, BoUpSLP &R,
     R.reorderTopToBottom();
     R.reorderBottomToTop();
   }
-  R.transformNodes();
   R.buildExternalUses();
 
   R.computeMinimumValueSizes();
@@ -23534,6 +23623,7 @@ bool SLPVectorizerPass::vectorizeStores(
               }
               if (Res && *Res) {
                 if (TreeSize) {
+                  R.transformNodes();
                   InstructionCost Cost = R.getTreeCost();
 
                   LLVM_DEBUG(dbgs() << "SLP: Found cost = " << Cost << " for VF=" << VF << "\n");
