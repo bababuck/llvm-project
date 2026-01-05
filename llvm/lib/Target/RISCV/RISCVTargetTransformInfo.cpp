@@ -2592,9 +2592,15 @@ InstructionCost RISCVTTIImpl::getArithmeticInstrCost(
   std::pair<InstructionCost, MVT> LT = getTypeLegalizationCost(Ty);
 
   // TODO: Handle scalar type.
-  if (!LT.second.isVector())
-    return BaseT::getArithmeticInstrCost(Opcode, Ty, CostKind, Op1Info, Op2Info,
-                                         Args, CxtI);
+  if (!LT.second.isVector()) {
+    switch (Opcode) {
+    case ISD::ADD:
+      return InstructionCost(1, 4);
+    default:
+      return BaseT::getArithmeticInstrCost(Opcode, Ty, CostKind, Op1Info, Op2Info,
+                                           Args, CxtI);
+    }
+  }
 
   // f16 with zvfhmin and bf16 will be promoted to f32.
   // FIXME: nxv32[b]f16 will be custom lowered and split.
