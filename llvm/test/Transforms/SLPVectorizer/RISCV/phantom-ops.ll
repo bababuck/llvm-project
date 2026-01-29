@@ -60,24 +60,10 @@ define void @phantom_shl(ptr noalias %l, ptr noalias %s) {
 define void @phantom_ashr(ptr noalias %l, ptr noalias %s) {
 ; CHECK-LABEL: @phantom_ashr(
 ; CHECK-NEXT:    [[LPTR0:%.*]] = getelementptr i32, ptr [[L:%.*]], i32 0
-; CHECK-NEXT:    [[LPTR4:%.*]] = getelementptr i32, ptr [[L]], i32 4
-; CHECK-NEXT:    [[LPTR6:%.*]] = getelementptr i32, ptr [[L]], i32 6
-; CHECK-NEXT:    [[LPTR7:%.*]] = getelementptr i32, ptr [[L]], i32 7
 ; CHECK-NEXT:    [[SPTR0:%.*]] = getelementptr i32, ptr [[S:%.*]], i32 0
-; CHECK-NEXT:    [[SPTR4:%.*]] = getelementptr i32, ptr [[S]], i32 4
-; CHECK-NEXT:    [[SPTR6:%.*]] = getelementptr i32, ptr [[S]], i32 6
-; CHECK-NEXT:    [[SPTR7:%.*]] = getelementptr i32, ptr [[S]], i32 7
-; CHECK-NEXT:    [[LOAD6:%.*]] = load i32, ptr [[LPTR6]], align 4
-; CHECK-NEXT:    [[LOAD7:%.*]] = load i32, ptr [[LPTR7]], align 4
-; CHECK-NEXT:    [[OP6:%.*]] = ashr i32 [[LOAD6]], 8
-; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i32>, ptr [[LPTR0]], align 4
-; CHECK-NEXT:    [[TMP2:%.*]] = ashr <4 x i32> [[TMP1]], splat (i32 8)
-; CHECK-NEXT:    store <4 x i32> [[TMP2]], ptr [[SPTR0]], align 4
-; CHECK-NEXT:    [[TMP3:%.*]] = load <2 x i32>, ptr [[LPTR4]], align 4
-; CHECK-NEXT:    [[TMP4:%.*]] = ashr <2 x i32> [[TMP3]], splat (i32 8)
-; CHECK-NEXT:    store <2 x i32> [[TMP4]], ptr [[SPTR4]], align 4
-; CHECK-NEXT:    store i32 [[OP6]], ptr [[SPTR6]], align 4
-; CHECK-NEXT:    store i32 [[LOAD7]], ptr [[SPTR7]], align 4
+; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i32>, ptr [[LPTR0]], align 4
+; CHECK-NEXT:    [[TMP2:%.*]] = ashr <8 x i32> [[TMP1]], <i32 8, i32 8, i32 8, i32 8, i32 8, i32 8, i32 8, i32 0>
+; CHECK-NEXT:    store <8 x i32> [[TMP2]], ptr [[SPTR0]], align 4
 ; CHECK-NEXT:    ret void
 ;
   %lptr0 = getelementptr i32, ptr %l, i32 0
@@ -114,7 +100,7 @@ define void @phantom_ashr(ptr noalias %l, ptr noalias %s) {
   %op4 = ashr i32 %load4, 8
   %op5 = ashr i32 %load5, 8
   %op6 = ashr i32 %load6, 8
-; %op7 = ashr i32 %load7, 0 <-- missing phantom shift
+  %op7 = ashr i32 %load7, 0
 
   store i32 %op0, ptr %sptr0
   store i32 %op1, ptr %sptr1
@@ -123,7 +109,7 @@ define void @phantom_ashr(ptr noalias %l, ptr noalias %s) {
   store i32 %op4, ptr %sptr4
   store i32 %op5, ptr %sptr5
   store i32 %op6, ptr %sptr6
-  store i32 %load7, ptr %sptr7
+  store i32 %op7, ptr %sptr7
   ret void
 }
 
