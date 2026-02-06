@@ -58,19 +58,19 @@ define <8 x i64> @select_non_contiguous_v8i64(<8 x i64> %v, <8 x i64> %w) {
 
 define <8 x i16> @shuffle_can_vslideup(<8 x i16> %v, <8 x i16> %w, <16 x i16> %shuff0, <16 x i16> %shuff1) {
 ; CHECK-LABEL: 'shuffle_can_vslideup'
-; CHECK-NEXT:  Cost Model: Found an estimated cost of 11 for instruction: %res0 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 2, i32 1, i32 3, i32 0, i32 8, i32 9, i32 11, i32 13>
-; CHECK-NEXT:  Cost Model: Found an estimated cost of 11 for instruction: %res1 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 12, i32 11, i32 9, i32 10, i32 3, i32 7, i32 4, i32 1>
-; CHECK-NEXT:  Cost Model: Found an estimated cost of 11 for instruction: %res2 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 12, i32 11, i32 0, i32 5, i32 3, i32 7, i32 4, i32 1>
-; CHECK-NEXT:  Cost Model: Found an estimated cost of 11 for instruction: %res3 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 12, i32 poison, i32 0, i32 5, i32 3, i32 7, i32 poison, i32 1>
-; CHECK-NEXT:  Cost Model: Found an estimated cost of 19 for instruction: %merge2 = shufflevector <16 x i16> %shuff0, <16 x i16> %shuff1, <16 x i32> <i32 0, i32 4, i32 8, i32 12, i32 1, i32 5, i32 9, i32 13, i32 19, i32 23, i32 27, i32 31, i32 18, i32 22, i32 26, i32 30>
+; CHECK-NEXT:  Cost Model: Found an estimated cost of 9 for instruction: %res0 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 2, i32 1, i32 3, i32 0, i32 8, i32 9, i32 11, i32 13>
+; CHECK-NEXT:  Cost Model: Found an estimated cost of 9 for instruction: %res1 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 12, i32 11, i32 9, i32 10, i32 3, i32 7, i32 4, i32 1>
+; CHECK-NEXT:  Cost Model: Found an estimated cost of 9 for instruction: %res2 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 12, i32 11, i32 0, i32 5, i32 3, i32 7, i32 4, i32 1>
+; CHECK-NEXT:  Cost Model: Found an estimated cost of 9 for instruction: %res3 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 12, i32 poison, i32 0, i32 5, i32 3, i32 7, i32 poison, i32 1>
+; CHECK-NEXT:  Cost Model: Found an estimated cost of 18 for instruction: %merge2 = shufflevector <16 x i16> %shuff0, <16 x i16> %shuff1, <16 x i32> <i32 0, i32 4, i32 8, i32 12, i32 1, i32 5, i32 9, i32 13, i32 19, i32 23, i32 27, i32 31, i32 18, i32 22, i32 26, i32 30>
 ; CHECK-NEXT:  Cost Model: Found an estimated cost of 0 for instruction: ret <8 x i16> %res3
 ;
 ; CHECK-SIZE-LABEL: 'shuffle_can_vslideup'
-; CHECK-SIZE-NEXT:  Cost Model: Found an estimated cost of 11 for instruction: %res0 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 2, i32 1, i32 3, i32 0, i32 8, i32 9, i32 11, i32 13>
-; CHECK-SIZE-NEXT:  Cost Model: Found an estimated cost of 11 for instruction: %res1 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 12, i32 11, i32 9, i32 10, i32 3, i32 7, i32 4, i32 1>
-; CHECK-SIZE-NEXT:  Cost Model: Found an estimated cost of 11 for instruction: %res2 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 12, i32 11, i32 0, i32 5, i32 3, i32 7, i32 4, i32 1>
-; CHECK-SIZE-NEXT:  Cost Model: Found an estimated cost of 11 for instruction: %res3 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 12, i32 poison, i32 0, i32 5, i32 3, i32 7, i32 poison, i32 1>
-; CHECK-SIZE-NEXT:  Cost Model: Found an estimated cost of 11 for instruction: %merge2 = shufflevector <16 x i16> %shuff0, <16 x i16> %shuff1, <16 x i32> <i32 0, i32 4, i32 8, i32 12, i32 1, i32 5, i32 9, i32 13, i32 19, i32 23, i32 27, i32 31, i32 18, i32 22, i32 26, i32 30>
+; CHECK-SIZE-NEXT:  Cost Model: Found an estimated cost of 9 for instruction: %res0 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 2, i32 1, i32 3, i32 0, i32 8, i32 9, i32 11, i32 13>
+; CHECK-SIZE-NEXT:  Cost Model: Found an estimated cost of 9 for instruction: %res1 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 12, i32 11, i32 9, i32 10, i32 3, i32 7, i32 4, i32 1>
+; CHECK-SIZE-NEXT:  Cost Model: Found an estimated cost of 9 for instruction: %res2 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 12, i32 11, i32 0, i32 5, i32 3, i32 7, i32 4, i32 1>
+; CHECK-SIZE-NEXT:  Cost Model: Found an estimated cost of 9 for instruction: %res3 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 12, i32 poison, i32 0, i32 5, i32 3, i32 7, i32 poison, i32 1>
+; CHECK-SIZE-NEXT:  Cost Model: Found an estimated cost of 9 for instruction: %merge2 = shufflevector <16 x i16> %shuff0, <16 x i16> %shuff1, <16 x i32> <i32 0, i32 4, i32 8, i32 12, i32 1, i32 5, i32 9, i32 13, i32 19, i32 23, i32 27, i32 31, i32 18, i32 22, i32 26, i32 30>
 ; CHECK-SIZE-NEXT:  Cost Model: Found an estimated cost of 1 for instruction: ret <8 x i16> %res3
 ;
   %res0 = shufflevector <8 x i16> %v, <8 x i16> %w, <8 x i32> <i32 2, i32 1, i32 3, i32 0, i32 8, i32 9, i32 11, i32 13> ; Balanced
