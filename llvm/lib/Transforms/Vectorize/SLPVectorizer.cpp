@@ -1687,6 +1687,38 @@ static InstructionsState getSameOpcode(ArrayRef<Value *> VL,
   }
 
   if (IsBinOp) {
+    auto shouldBeAltOpt = [&](unsigned MainOpcode, unsigned AltOpcode) {
+      for (Value *V : iterator_range(It, VL.end())) {
+        auto *I = dyn_cast<Instruction>(V);
+        if (!I)
+          continue;
+        bool FoundOpcode = false;
+        if (I->getOpcode() != MainOpcode) {
+          for (auto &V : I->operands()) {
+            auto *I = dyn_cast<Instruction>(V);
+            if (!I)
+              continue;
+            if (I->getOpcode() == MainOpcode) {
+              FoundOpcode = true;
+              break;
+            }
+          }
+          if (!FoundOpcode)
+            return true;
+        } else {
+          for (auto &V : I->operands()) {
+            auto *I = dyn_cast<Instruction>(V);
+            if (!I)
+              continue;
+            if (I->getOpcode() == MainOpcode)
+              return true;
+          }
+        }
+      }
+      return false;
+    };
+    if (!shouldBeAltOpt(BinOpHelper.getMainOpcode(), BinOpHelper.getAltOpcode()))
+      return InstructionsState::invalid();
     MainOp = findInstructionWithOpcode(VL, BinOpHelper.getMainOpcode());
     assert(MainOp && "Cannot find MainOp with Opcode from BinOpHelper.");
     AltOp = findInstructionWithOpcode(VL, BinOpHelper.getAltOpcode());
