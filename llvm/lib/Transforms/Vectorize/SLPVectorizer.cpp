@@ -243,6 +243,52 @@ static const int MinScheduleRegionSize = 16;
 /// Maximum allowed number of operands in the PHI nodes.
 static const unsigned MaxPHINumOperands = 128;
 
+/// For instructions that are not trivially vectorizable, try to vectorize thier
+/// operands.
+static Value *getNonTriviallyVectorizableIntrinsicCallOperand(Value *V) {
+  auto *I = dyn_cast<Instruction>(V);
+  if (!I)
+    return nullptr;
+
+  Value *Operand = nullptr;
+
+  // Early bail out conditions
+  if (auto *CI = dyn_cast<CallInst>(I)) {
+    Intrinsic::ID ID = CI->getIntrinsicID();
+
+    // Only consider intrinsic calls.
+    // FIXME: We may want to relax this condition in future.
+    if (ID == Intrinsic::not_intrinsic)
+      return nullptr;
+
+    // Skip trivially vectorizable intrinsics.
+    if (isTriviallyVectorizable(ID))
+      return nullptr;
+
+    // Only look through unary intrinsic calls.
+    if (CI->arg_size() != 1)
+      return nullptr;
+
+    // Check if it is speculatable, no memory access and will return
+    if (!CI->hasFnAttr(Attribute::Speculatable) || !CI->doesNotAccessMemory() ||
+        !CI->willReturn())
+      return nullptr;
+
+    Operand = CI->getArgOperand(0);
+
+    // Operand type should match the result type we ignore type changing
+    // intrinsics.
+    if (Operand->getType() != CI->getType())
+      return nullptr;
+  }
+
+  // Only consider the operand if it is an Instruction.
+  if (!Operand || !isa<Instruction>(Operand))
+    return nullptr;
+
+  return Operand;
+}
+
 /// Predicate for the element types that the SLP vectorizer supports.
 ///
 /// The most important thing to filter here are types which are invalid in LLVM
@@ -29453,6 +29499,22 @@ bool SLPVectorizerPass::vectorizeChainsInBlock(BasicBlock *BB, BoUpSLP &R) {
       PostProcessInserts.insert(&*It);
     else if (isa<CmpInst>(It))
       PostProcessCmps.insert(cast<CmpInst>(&*It));
+  }
+
+  DenseMap<Intrinsic::ID, SmallSetVector<Value *, 4>> IntrinsicSeedOps;
+  for (Instruction &I : *BB) {
+    if (R.isDeleted(&I))
+      continue;
+    // Collect operands of non-trivially vectorizable intrinsic calls (e.g.,
+    // llvm.amdgcn.exp2) and group by intrinsic ID, so their operands can be
+    // vectorized independently.
+    if (Value *Op = getNonTriviallyVectorizableIntrinsicCallOperand(&I))
+      IntrinsicSeedOps[cast<CallInst>(&I)->getIntrinsicID()].insert(Op);
+  }
+  // Try to vectorize per intrinsic call ID.
+  for (auto &[ID, Ops] : IntrinsicSeedOps) {
+    if (Ops.size() >= 2)
+      Changed |= tryToVectorizeList(Ops.getArrayRef(), R);
   }
 
   return Changed;
