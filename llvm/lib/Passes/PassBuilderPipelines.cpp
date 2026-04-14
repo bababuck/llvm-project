@@ -131,6 +131,7 @@
 #include "llvm/Transforms/Scalar/Reassociate.h"
 #include "llvm/Transforms/Scalar/SCCP.h"
 #include "llvm/Transforms/Scalar/SROA.h"
+#include "llvm/Transforms/Scalar/ScalableToFixedVectors.h"
 #include "llvm/Transforms/Scalar/SimpleLoopUnswitch.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
 #include "llvm/Transforms/Scalar/SpeculativeExecution.h"
@@ -801,6 +802,8 @@ PassBuilder::buildFunctionSimplificationPipeline(OptimizationLevel Level,
                                   .sinkCommonInsts(true)));
   FPM.addPass(InstCombinePass());
   invokePeepholeEPCallbacks(FPM, Level);
+
+  FPM.addPass(ScalableToFixedVectorsPass());
 
   return FPM;
 }
@@ -2307,6 +2310,9 @@ PassBuilder::buildLTODefaultPipeline(OptimizationLevel Level,
                                       .convertSwitchToArithmetic(true)
                                       .hoistCommonInsts(true)
                                       .speculateUnpredictables(true)));
+
+  LateFPM.addPass(ScalableToFixedVectorsPass());
+
   MPM.addPass(createModuleToFunctionPassAdaptor(std::move(LateFPM)));
 
   // Drop bodies of available eternally objects to improve GlobalDCE.
