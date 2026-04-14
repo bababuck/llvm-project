@@ -12,13 +12,22 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/InstructionCost.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 
 void InstructionCost::print(raw_ostream &OS) const {
-  if (isValid())
-    OS << Value;
-  else
+  if (isValid()) {
+    CostType WholeNumber = Value / CostGranularity;
+    CostType Remainder = Value % CostGranularity;
+    CostType RemainderHundreds = (Remainder * 100) / CostGranularity;
+    while (RemainderHundreds % 10 == 0 && RemainderHundreds)
+      RemainderHundreds /= 10;
+    OS << WholeNumber;
+    if (RemainderHundreds)
+      OS << "." << RemainderHundreds;
+  } else {
     OS << "Invalid";
+  }
 }
