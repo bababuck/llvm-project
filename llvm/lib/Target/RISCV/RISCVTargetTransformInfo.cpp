@@ -2316,7 +2316,7 @@ InstructionCost RISCVTTIImpl::getMemoryOpCost(unsigned Opcode, Type *Src,
         return Cost;
 
     return BaseT::getMemoryOpCost(Opcode, Src, Alignment, AddressSpace,
-                                  CostKind, OpInfo, I);
+                                  CostKind, OpInfo, I) / 2;
   }();
 
   // Assume memory ops cost scale with the number of vector registers
@@ -2708,7 +2708,7 @@ InstructionCost RISCVTTIImpl::getArithmeticInstrCost(
         return Entry->Cost * LT.first;
 
     return BaseT::getArithmeticInstrCost(Opcode, Ty, CostKind, Op1Info, Op2Info,
-                                         Args, CxtI);
+                                         Args, CxtI) / 2;
   }
 
   // f16 with zvfhmin and bf16 will be promoted to f32.
