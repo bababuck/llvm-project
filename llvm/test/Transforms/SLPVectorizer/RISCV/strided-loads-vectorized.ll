@@ -83,7 +83,8 @@ define void @test1(ptr %p, ptr noalias %s, i32 %stride) {
 ; CHECK-NEXT:    [[ARRAYIDX1:%.*]] = getelementptr inbounds [48 x float], ptr [[P]], i64 0, i64 30
 ; CHECK-NEXT:    [[ARRAYIDX2:%.*]] = getelementptr inbounds float, ptr [[S:%.*]], i64 0
 ; CHECK-NEXT:    [[TMP0:%.*]] = mul i64 [[STR]], 4
-; CHECK-NEXT:    [[TMP1:%.*]] = call <8 x float> @llvm.experimental.vp.strided.load.v8f32.p0.i64(ptr align 4 [[ARRAYIDX]], i64 [[TMP0]], <8 x i1> splat (i1 true), i32 8)
+; CHECK-NEXT:    [[TMP4:%.*]] = mul i64 [[TMP0]], 1
+; CHECK-NEXT:    [[TMP1:%.*]] = call <8 x float> @llvm.experimental.vp.strided.load.v8f32.p0.i64(ptr align 4 [[ARRAYIDX]], i64 [[TMP4]], <8 x i1> splat (i1 true), i32 8)
 ; CHECK-NEXT:    [[TMP2:%.*]] = call <8 x float> @llvm.experimental.vp.strided.load.v8f32.p0.i64(ptr align 4 [[ARRAYIDX1]], i64 -16, <8 x i1> splat (i1 true), i32 8)
 ; CHECK-NEXT:    [[TMP3:%.*]] = fsub fast <8 x float> [[TMP2]], [[TMP1]]
 ; CHECK-NEXT:    store <8 x float> [[TMP3]], ptr [[ARRAYIDX2]], align 4
@@ -164,8 +165,9 @@ define void @test2(ptr %p, ptr noalias %s, i32 %stride) {
 ; CHECK-NEXT:    [[ST6:%.*]] = mul i64 [[STR]], 7
 ; CHECK-NEXT:    [[ARRAYIDX1:%.*]] = getelementptr inbounds [48 x float], ptr [[P]], i64 0, i64 [[ST6]]
 ; CHECK-NEXT:    [[ARRAYIDX2:%.*]] = getelementptr inbounds float, ptr [[S:%.*]], i64 0
+; CHECK-NEXT:    [[ST3:%.*]] = mul i64 [[STR]], 4
 ; CHECK-NEXT:    [[TMP0:%.*]] = call <8 x float> @llvm.experimental.vp.strided.load.v8f32.p0.i64(ptr align 4 [[ARRAYIDX]], i64 16, <8 x i1> splat (i1 true), i32 8)
-; CHECK-NEXT:    [[TMP1:%.*]] = mul i64 [[STR]], -4
+; CHECK-NEXT:    [[TMP1:%.*]] = mul i64 [[ST3]], -1
 ; CHECK-NEXT:    [[TMP2:%.*]] = call <8 x float> @llvm.experimental.vp.strided.load.v8f32.p0.i64(ptr align 4 [[ARRAYIDX1]], i64 [[TMP1]], <8 x i1> splat (i1 true), i32 8)
 ; CHECK-NEXT:    [[TMP3:%.*]] = fsub fast <8 x float> [[TMP2]], [[TMP0]]
 ; CHECK-NEXT:    store <8 x float> [[TMP3]], ptr [[ARRAYIDX2]], align 4

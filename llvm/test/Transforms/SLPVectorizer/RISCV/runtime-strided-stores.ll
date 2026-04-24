@@ -8,8 +8,7 @@ define void @runtime_stride(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-NEXT:    [[GEP_L0:%.*]] = getelementptr i8, ptr [[PL]], i64 0
 ; CHECK-NEXT:    [[GEP_S0:%.*]] = getelementptr i8, ptr [[PS]], i64 0
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i8>, ptr [[GEP_L0]], align 1
-; CHECK-NEXT:    [[TMP2:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v8i8.p0.i64(<8 x i8> [[TMP1]], ptr align 1 [[GEP_S0]], i64 [[TMP2]], <8 x i1> splat (i1 true), i32 8)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v8i8.p0.i64(<8 x i8> [[TMP1]], ptr align 1 [[GEP_S0]], i64 [[STRIDE]], <8 x i1> splat (i1 true), i32 8)
 ; CHECK-NEXT:    ret void
 ;
   %gep_l0 = getelementptr i8, ptr %pl, i64 0
@@ -58,8 +57,7 @@ define void @runtime_stride_complex_scev(ptr %pl, ptr %ps, i64 %stride, i64 %str
 ; CHECK-NEXT:    [[GEP_S0:%.*]] = getelementptr i8, ptr [[PS]], i64 0
 ; CHECK-NEXT:    [[GEP_SS0:%.*]] = getelementptr i8, ptr [[GEP_S0]], i64 [[STRIDE1]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i8>, ptr [[GEP_L0]], align 1
-; CHECK-NEXT:    [[TMP2:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v8i8.p0.i64(<8 x i8> [[TMP1]], ptr align 1 [[GEP_SS0]], i64 [[TMP2]], <8 x i1> splat (i1 true), i32 8)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v8i8.p0.i64(<8 x i8> [[TMP1]], ptr align 1 [[GEP_SS0]], i64 [[STRIDE]], <8 x i1> splat (i1 true), i32 8)
 ; CHECK-NEXT:    ret void
 ;
   %gep_l0 = getelementptr i8, ptr %pl, i64 0
@@ -121,10 +119,8 @@ define void @two_runtime_strides(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-NEXT:    [[GEP_S4:%.*]] = getelementptr i8, ptr [[PS]], i64 [[PS1]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i8>, ptr [[GEP_L4]], align 1
 ; CHECK-NEXT:    [[TMP2:%.*]] = load <4 x i8>, ptr [[GEP_L0]], align 1
-; CHECK-NEXT:    [[TMP3:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[TMP3]], <4 x i1> splat (i1 true), i32 4)
-; CHECK-NEXT:    [[TMP4:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP1]], ptr align 1 [[GEP_S4]], i64 [[TMP4]], <4 x i1> splat (i1 true), i32 4)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[STRIDE]], <4 x i1> splat (i1 true), i32 4)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP1]], ptr align 1 [[GEP_S4]], i64 [[STRIDE]], <4 x i1> splat (i1 true), i32 4)
 ; CHECK-NEXT:    ret void
 ;
   %gep_l0 = getelementptr i8, ptr %pl, i64 0
@@ -176,10 +172,8 @@ define void @runtime_strides_constant_gap(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-NEXT:    [[GEP_S4:%.*]] = getelementptr i8, ptr [[PS]], i64 100
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i8>, ptr [[GEP_L4]], align 1
 ; CHECK-NEXT:    [[TMP2:%.*]] = load <4 x i8>, ptr [[GEP_L0]], align 1
-; CHECK-NEXT:    [[TMP3:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[TMP3]], <4 x i1> splat (i1 true), i32 4)
-; CHECK-NEXT:    [[TMP4:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP1]], ptr align 1 [[GEP_S4]], i64 [[TMP4]], <4 x i1> splat (i1 true), i32 4)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[STRIDE]], <4 x i1> splat (i1 true), i32 4)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP1]], ptr align 1 [[GEP_S4]], i64 [[STRIDE]], <4 x i1> splat (i1 true), i32 4)
 ; CHECK-NEXT:    ret void
 ;
   %gep_l0 = getelementptr i8, ptr %pl, i64 0
@@ -232,10 +226,8 @@ define void @overlapping_strides(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-NEXT:    [[GEP_S4:%.*]] = getelementptr i8, ptr [[PS]], i64 [[PS1]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i8>, ptr [[GEP_L4]], align 1
 ; CHECK-NEXT:    [[TMP2:%.*]] = load <4 x i8>, ptr [[GEP_L0]], align 1
-; CHECK-NEXT:    [[TMP3:%.*]] = mul i64 [[STRIDE1]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[TMP3]], <4 x i1> splat (i1 true), i32 4)
-; CHECK-NEXT:    [[TMP4:%.*]] = mul i64 [[STRIDE1]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP1]], ptr align 1 [[GEP_S4]], i64 [[TMP4]], <4 x i1> splat (i1 true), i32 4)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[STRIDE1]], <4 x i1> splat (i1 true), i32 4)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP1]], ptr align 1 [[GEP_S4]], i64 [[STRIDE1]], <4 x i1> splat (i1 true), i32 4)
 ; CHECK-NEXT:    ret void
 ;
   %gep_l0 = getelementptr i8, ptr %pl, i64 0
@@ -298,8 +290,7 @@ define void @runtime_stride_unit_stride(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-NEXT:    [[GEP_S7:%.*]] = getelementptr i8, ptr [[GEP_S6]], i64 1
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i8>, ptr [[GEP_L3]], align 1
 ; CHECK-NEXT:    [[TMP2:%.*]] = load <2 x i8>, ptr [[GEP_L0]], align 1
-; CHECK-NEXT:    [[TMP3:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v2i8.p0.i64(<2 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[TMP3]], <2 x i1> splat (i1 true), i32 2)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v2i8.p0.i64(<2 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[STRIDE]], <2 x i1> splat (i1 true), i32 2)
 ; CHECK-NEXT:    store i8 [[LOAD2]], ptr [[GEP_S2]], align 1
 ; CHECK-NEXT:    store <4 x i8> [[TMP1]], ptr [[GEP_S3]], align 1
 ; CHECK-NEXT:    store i8 [[LOAD7]], ptr [[GEP_S7]], align 1
@@ -357,8 +348,7 @@ define void @unit_stride_runtime_stride(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i8>, ptr [[GEP_L0]], align 1
 ; CHECK-NEXT:    [[TMP2:%.*]] = load <4 x i8>, ptr [[GEP_L4]], align 1
 ; CHECK-NEXT:    store <4 x i8> [[TMP1]], ptr [[GEP_S0]], align 1
-; CHECK-NEXT:    [[TMP3:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP2]], ptr align 1 [[GEP_S4]], i64 [[TMP3]], <4 x i1> splat (i1 true), i32 4)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP2]], ptr align 1 [[GEP_S4]], i64 [[STRIDE]], <4 x i1> splat (i1 true), i32 4)
 ; CHECK-NEXT:    ret void
 ;
   %gep_l0 = getelementptr i8, ptr %pl, i64 0
@@ -412,8 +402,7 @@ define void @runtime_stride_constant_stride(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-NEXT:    [[GEP_S4:%.*]] = getelementptr i8, ptr [[GEP_S3]], i64 1
 ; CHECK-NEXT:    [[TMP3:%.*]] = load <4 x i8>, ptr [[GEP_L4]], align 1
 ; CHECK-NEXT:    [[TMP2:%.*]] = load <4 x i8>, ptr [[GEP_L0]], align 1
-; CHECK-NEXT:    [[TMP4:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[TMP4]], <4 x i1> splat (i1 true), i32 4)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[STRIDE]], <4 x i1> splat (i1 true), i32 4)
 ; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP3]], ptr align 1 [[GEP_S4]], i64 2, <4 x i1> splat (i1 true), i32 4)
 ; CHECK-NEXT:    ret void
 ;
@@ -469,8 +458,7 @@ define void @constant_stride_runtime_stride(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i8>, ptr [[GEP_L0]], align 1
 ; CHECK-NEXT:    [[TMP2:%.*]] = load <4 x i8>, ptr [[GEP_L4]], align 1
 ; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP1]], ptr align 1 [[GEP_S0]], i64 2, <4 x i1> splat (i1 true), i32 4)
-; CHECK-NEXT:    [[TMP3:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP2]], ptr align 1 [[GEP_S4]], i64 [[TMP3]], <4 x i1> splat (i1 true), i32 4)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP2]], ptr align 1 [[GEP_S4]], i64 [[STRIDE]], <4 x i1> splat (i1 true), i32 4)
 ; CHECK-NEXT:    ret void
 ;
   %gep_l0 = getelementptr i8, ptr %pl, i64 0
@@ -525,8 +513,7 @@ define void @overlap(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-NEXT:    [[GEP_S3:%.*]] = getelementptr i8, ptr [[GEP_S2]], i64 [[STRIDE]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i8>, ptr [[GEP_L3]], align 1
 ; CHECK-NEXT:    [[TMP2:%.*]] = load <2 x i8>, ptr [[GEP_L0]], align 1
-; CHECK-NEXT:    [[TMP3:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v2i8.p0.i64(<2 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[TMP3]], <2 x i1> splat (i1 true), i32 2)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v2i8.p0.i64(<2 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[STRIDE]], <2 x i1> splat (i1 true), i32 2)
 ; CHECK-NEXT:    store i8 [[LOAD2]], ptr [[GEP_S2]], align 1
 ; CHECK-NEXT:    store <4 x i8> [[TMP1]], ptr [[GEP_S3]], align 1
 ; CHECK-NEXT:    ret void
@@ -579,8 +566,7 @@ define void @overlap_constant_stride(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-NEXT:    [[GEP_S3:%.*]] = getelementptr i8, ptr [[GEP_S2]], i64 [[STRIDE]]
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x i8>, ptr [[GEP_L3]], align 1
 ; CHECK-NEXT:    [[TMP2:%.*]] = load <2 x i8>, ptr [[GEP_L0]], align 1
-; CHECK-NEXT:    [[TMP3:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v2i8.p0.i64(<2 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[TMP3]], <2 x i1> splat (i1 true), i32 2)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v2i8.p0.i64(<2 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[STRIDE]], <2 x i1> splat (i1 true), i32 2)
 ; CHECK-NEXT:    store i8 [[LOAD2]], ptr [[GEP_S2]], align 1
 ; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v4i8.p0.i64(<4 x i8> [[TMP1]], ptr align 1 [[GEP_S3]], i64 2, <4 x i1> splat (i1 true), i32 4)
 ; CHECK-NEXT:    ret void
@@ -627,8 +613,7 @@ define void @runtime_stride_reorder(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-NEXT:    [[GEP_S0:%.*]] = getelementptr i8, ptr [[PS]], i64 0
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i8>, ptr [[GEP_L0]], align 1
 ; CHECK-NEXT:    [[TMP2:%.*]] = shufflevector <8 x i8> [[TMP1]], <8 x i8> poison, <8 x i32> <i32 0, i32 2, i32 1, i32 4, i32 7, i32 5, i32 6, i32 3>
-; CHECK-NEXT:    [[TMP3:%.*]] = mul i64 [[STRIDE]], 1
-; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v8i8.p0.i64(<8 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[TMP3]], <8 x i1> splat (i1 true), i32 8)
+; CHECK-NEXT:    call void @llvm.experimental.vp.strided.store.v8i8.p0.i64(<8 x i8> [[TMP2]], ptr align 1 [[GEP_S0]], i64 [[STRIDE]], <8 x i1> splat (i1 true), i32 8)
 ; CHECK-NEXT:    ret void
 ;
   %gep_l0 = getelementptr i8, ptr %pl, i64 0

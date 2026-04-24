@@ -431,9 +431,10 @@ define void @rt_stride_1_no_reordering_i16(ptr %pl, i64 %stride, ptr %ps) {
 ; CHECK-LABEL: define void @rt_stride_1_no_reordering_i16(
 ; CHECK-SAME: ptr [[PL:%.*]], i64 [[STRIDE:%.*]], ptr [[PS:%.*]]) #[[ATTR0]] {
 ; CHECK-NEXT:    [[STRIDE0:%.*]] = mul nsw i64 [[STRIDE]], 0
+; CHECK-NEXT:    [[STRIDE2:%.*]] = mul nuw i64 [[STRIDE]], 2
 ; CHECK-NEXT:    [[GEP_L0:%.*]] = getelementptr inbounds i16, ptr [[PL]], i64 [[STRIDE0]]
 ; CHECK-NEXT:    [[GEP_S0:%.*]] = getelementptr inbounds i16, ptr [[PS]], i64 0
-; CHECK-NEXT:    [[TMP1:%.*]] = mul i64 [[STRIDE]], 2
+; CHECK-NEXT:    [[TMP1:%.*]] = mul i64 [[STRIDE2]], 1
 ; CHECK-NEXT:    [[TMP2:%.*]] = call <16 x i16> @llvm.experimental.vp.strided.load.v16i16.p0.i64(ptr align 1 [[GEP_L0]], i64 [[TMP1]], <16 x i1> splat (i1 true), i32 16)
 ; CHECK-NEXT:    store <16 x i16> [[TMP2]], ptr [[GEP_S0]], align 1
 ; CHECK-NEXT:    ret void
@@ -909,9 +910,10 @@ define void @rt_stride_widen_no_reordering_i16(ptr %pl, i64 %stride, ptr %ps) {
 ; CHECK-LABEL: define void @rt_stride_widen_no_reordering_i16(
 ; CHECK-SAME: ptr [[PL:%.*]], i64 [[STRIDE:%.*]], ptr [[PS:%.*]]) #[[ATTR0]] {
 ; CHECK-NEXT:    [[OFFSET0:%.*]] = mul nsw i64 [[STRIDE]], 0
+; CHECK-NEXT:    [[OFFSET8:%.*]] = mul nuw i64 [[STRIDE]], 2
 ; CHECK-NEXT:    [[GEP_L0:%.*]] = getelementptr inbounds i16, ptr [[PL]], i64 [[OFFSET0]]
 ; CHECK-NEXT:    [[GEP_S0:%.*]] = getelementptr inbounds i16, ptr [[PS]], i64 0
-; CHECK-NEXT:    [[TMP1:%.*]] = mul i64 [[STRIDE]], 2
+; CHECK-NEXT:    [[TMP1:%.*]] = mul i64 [[OFFSET8]], 1
 ; CHECK-NEXT:    [[TMP2:%.*]] = call <4 x i64> @llvm.experimental.vp.strided.load.v4i64.p0.i64(ptr align 1 [[GEP_L0]], i64 [[TMP1]], <4 x i1> splat (i1 true), i32 4)
 ; CHECK-NEXT:    [[TMP11:%.*]] = bitcast <4 x i64> [[TMP2]] to <16 x i16>
 ; CHECK-NEXT:    store <16 x i16> [[TMP11]], ptr [[GEP_S0]], align 1
