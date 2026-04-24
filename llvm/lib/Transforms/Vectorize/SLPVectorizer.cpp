@@ -6766,7 +6766,6 @@ static const SCEV *calculateRtStride(ArrayRef<Value *> PointerOps, Type *ElemTy,
 
   if (isa<SCEVCouldNotCompute>(Dist) || !H)
     return nullptr;
-  int Size = DL.getTypeStoreSize(ElemTy);
   auto TryGetStride = [&](const SCEV *Dist,
                           const SCEV *Multiplier) -> const SCEV * {
     if (Multiplier == Dist)
@@ -6791,8 +6790,8 @@ static const SCEV *calculateRtStride(ArrayRef<Value *> PointerOps, Type *ElemTy,
   };
   // Stride_in_elements = Dist / element_size * (num_elems - 1).
   const SCEV *Stride = nullptr;
-  if (Size != 1 || SCEVs.size() > 1) {
-    const SCEV *Sz = SE.getConstant(Dist->getType(), Size * (SCEVs.size() - 1));
+  if (SCEVs.size() > 1) {
+    const SCEV *Sz = SE.getConstant(Dist->getType(), (SCEVs.size() - 1));
     Stride = TryGetStride(Dist, Sz);
     if (!Stride)
       return nullptr;
@@ -6814,7 +6813,7 @@ static const SCEV *calculateRtStride(ArrayRef<Value *> PointerOps, Type *ElemTy,
       if (!Coeff)
         return nullptr;
       const auto *SC = dyn_cast<SCEVConstant>(Coeff);
-      if (!SC || isa<SCEVCouldNotCompute>(SC))
+      if (!SC)
         return nullptr;
       Coeffs[Idx] = (int64_t)SC->getAPInt().getLimitedValue();
       if (!SE.getMinusSCEV(PtrSCEV, SE.getAddExpr(PtrSCEVLowest,
@@ -6826,7 +6825,7 @@ static const SCEV *calculateRtStride(ArrayRef<Value *> PointerOps, Type *ElemTy,
       Coeffs[Idx] = 0;
     }
     // If the strides are not the same or repeated, we can't vectorize.
-    if ((Dist / Size) * Size != Dist || (Dist / Size) >= SCEVs.size())
+    if (Dist >= SCEVs.size())
       return nullptr;
     auto Res = Offsets.emplace(Dist, Cnt);
     if (!Res.second)
@@ -7318,7 +7317,8 @@ bool BoUpSLP::analyzeConstantStrideCandidate(
   }
 
   Type *StrideTy = DL->getIndexType(Ptr0->getType());
-  SPtrInfo.StrideVal = ConstantInt::getSigned(StrideTy, StrideIntVal);
+  SPtrInfo.StrideVal = ConstantInt::getSigned(
+      StrideTy, StrideIntVal * DL->getTypeAllocSize(ScalarTy));
   SPtrInfo.Ty = getWidenedType(NewScalarTy, VecSz);
   return true;
 }
@@ -8983,7 +8983,7 @@ void BoUpSLP::reorderBottomToTop(bool IgnoreReorder) {
     TreeEntry *TE = Queue.top();
     const TreeEntry *UserTE = TE->UserTreeIndex.UserTE;
     Queue.pop();
-    if (UserTE->NoReorder)
+    if (UserTE && UserTE->NoReorder)
       continue;
     SmallVector<TreeEntry *> OrderedOps(1, TE);
     while (!Queue.empty()) {
@@ -14296,7 +14296,8 @@ void BoUpSLP::transformNodes() {
                                                 ->getPointerOperand()
                                                 ->getType());
           StridedPtrInfo SPtrInfo;
-          SPtrInfo.StrideVal = ConstantInt::get(StrideTy, 1);
+          SPtrInfo.StrideVal =
+              ConstantInt::get(StrideTy, DL->getTypeAllocSize(ScalarTy));
           SPtrInfo.Ty = VecTy;
           TreeEntryToStridedPtrInfoMap[&E] = SPtrInfo;
           E.State = TreeEntry::StridedVectorize;
@@ -14335,7 +14336,8 @@ void BoUpSLP::transformNodes() {
                                                 ->getPointerOperand()
                                                 ->getType());
           StridedPtrInfo SPtrInfo;
-          SPtrInfo.StrideVal = ConstantInt::getSigned(StrideTy, -1);
+          SPtrInfo.StrideVal = ConstantInt::getSigned(
+              StrideTy, -1 * DL->getTypeAllocSize(ScalarTy));
           SPtrInfo.Ty = VecTy;
           TreeEntryToStridedPtrInfoMap[&E] = SPtrInfo;
         }
@@ -22030,7 +22032,6 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
         Value *PtrN = cast<LoadInst>(E->Scalars.back())->getPointerOperand();
         PO = IsReverseOrder ? PtrN : Ptr0;
         Type *StrideTy = DL->getIndexType(PO->getType());
-        Value *StrideVal;
         const StridedPtrInfo &SPtrInfo = TreeEntryToStridedPtrInfoMap.at(E);
         StridedLoadTy = SPtrInfo.Ty;
         assert(StridedLoadTy && "Missing StridedPointerInfo for tree entry.");
@@ -22045,13 +22046,11 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
           Stride = Expander.expandCodeFor(StrideSCEV, StrideSCEV->getType(),
                                           &*Builder.GetInsertPoint());
         }
-        Value *NewStride =
+        Value *StrideVal =
             Builder.CreateIntCast(Stride, StrideTy, /*isSigned=*/true);
         StrideVal = Builder.CreateMul(
-            NewStride, ConstantInt::getSigned(
-                           StrideTy, (IsReverseOrder ? -1 : 1) *
-                                         static_cast<int>(
-                                             DL->getTypeAllocSize(ScalarTy))));
+            StrideVal,
+            ConstantInt::getSigned(StrideTy, (IsReverseOrder ? -1 : 1)));
         Align CommonAlignment = computeCommonAlignment<LoadInst>(E->Scalars);
         auto *Inst = Builder.CreateIntrinsic(
             Intrinsic::experimental_vp_strided_load,
@@ -22142,11 +22141,6 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
         }
         Value *StrideVal =
             Builder.CreateIntCast(Stride, StrideTy, /*isSigned=*/true);
-        // vp_strided_store::stride is defined in bytes
-        StrideVal = Builder.CreateMul(
-            StrideVal,
-            ConstantInt::getSigned(
-                StrideTy, static_cast<int>(DL->getTypeAllocSize(ScalarTy))));
         if (StridedStoreTy != VecTy)
           VecValue = Builder.CreateBitOrPointerCast(VecValue, StridedStoreTy);
         auto *Inst = Builder.CreateIntrinsic(
