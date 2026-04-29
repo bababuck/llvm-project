@@ -112,37 +112,10 @@ define void @unaligned_rt_stride(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-LABEL: define void @unaligned_rt_stride(
 ; CHECK-SAME: ptr [[PL:%.*]], ptr [[PS:%.*]], i64 [[STRIDE:%.*]]) #[[ATTR0]] {
 ; CHECK-NEXT:    [[GEP_L0:%.*]] = getelementptr inbounds i8, ptr [[PL]], i64 0
-; CHECK-NEXT:    [[GEP_L1:%.*]] = getelementptr inbounds i8, ptr [[GEP_L0]], i64 [[STRIDE]]
-; CHECK-NEXT:    [[GEP_L2:%.*]] = getelementptr inbounds i8, ptr [[GEP_L1]], i64 [[STRIDE]]
-; CHECK-NEXT:    [[GEP_L3:%.*]] = getelementptr inbounds i8, ptr [[GEP_L2]], i64 [[STRIDE]]
-; CHECK-NEXT:    [[GEP_L4:%.*]] = getelementptr inbounds i8, ptr [[GEP_L3]], i64 [[STRIDE]]
-; CHECK-NEXT:    [[GEP_L5:%.*]] = getelementptr inbounds i8, ptr [[GEP_L4]], i64 [[STRIDE]]
-; CHECK-NEXT:    [[GEP_L6:%.*]] = getelementptr inbounds i8, ptr [[GEP_L5]], i64 [[STRIDE]]
-; CHECK-NEXT:    [[GEP_L7:%.*]] = getelementptr inbounds i8, ptr [[GEP_L6]], i64 [[STRIDE]]
-; CHECK-NEXT:    [[LOAD0:%.*]] = load i16, ptr [[GEP_L0]], align 1
-; CHECK-NEXT:    [[LOAD1:%.*]] = load i16, ptr [[GEP_L1]], align 1
-; CHECK-NEXT:    [[LOAD2:%.*]] = load i16, ptr [[GEP_L2]], align 1
-; CHECK-NEXT:    [[LOAD3:%.*]] = load i16, ptr [[GEP_L3]], align 1
-; CHECK-NEXT:    [[LOAD4:%.*]] = load i16, ptr [[GEP_L4]], align 1
-; CHECK-NEXT:    [[LOAD5:%.*]] = load i16, ptr [[GEP_L5]], align 1
-; CHECK-NEXT:    [[LOAD6:%.*]] = load i16, ptr [[GEP_L6]], align 1
-; CHECK-NEXT:    [[LOAD7:%.*]] = load i16, ptr [[GEP_L7]], align 1
 ; CHECK-NEXT:    [[GEP_S0:%.*]] = getelementptr inbounds i16, ptr [[PS]], i64 0
-; CHECK-NEXT:    [[GEP_S1:%.*]] = getelementptr inbounds i16, ptr [[PS]], i64 1
-; CHECK-NEXT:    [[GEP_S2:%.*]] = getelementptr inbounds i16, ptr [[PS]], i64 2
-; CHECK-NEXT:    [[GEP_S3:%.*]] = getelementptr inbounds i16, ptr [[PS]], i64 3
-; CHECK-NEXT:    [[GEP_S4:%.*]] = getelementptr inbounds i16, ptr [[PS]], i64 4
-; CHECK-NEXT:    [[GEP_S5:%.*]] = getelementptr inbounds i16, ptr [[PS]], i64 5
-; CHECK-NEXT:    [[GEP_S6:%.*]] = getelementptr inbounds i16, ptr [[PS]], i64 6
-; CHECK-NEXT:    [[GEP_S7:%.*]] = getelementptr inbounds i16, ptr [[PS]], i64 7
-; CHECK-NEXT:    store i16 [[LOAD0]], ptr [[GEP_S0]], align 1
-; CHECK-NEXT:    store i16 [[LOAD1]], ptr [[GEP_S1]], align 1
-; CHECK-NEXT:    store i16 [[LOAD2]], ptr [[GEP_S2]], align 1
-; CHECK-NEXT:    store i16 [[LOAD3]], ptr [[GEP_S3]], align 1
-; CHECK-NEXT:    store i16 [[LOAD4]], ptr [[GEP_S4]], align 1
-; CHECK-NEXT:    store i16 [[LOAD5]], ptr [[GEP_S5]], align 1
-; CHECK-NEXT:    store i16 [[LOAD6]], ptr [[GEP_S6]], align 1
-; CHECK-NEXT:    store i16 [[LOAD7]], ptr [[GEP_S7]], align 1
+; CHECK-NEXT:    [[TMP1:%.*]] = mul i64 [[STRIDE]], 1
+; CHECK-NEXT:    [[TMP2:%.*]] = call <8 x i16> @llvm.experimental.vp.strided.load.v8i16.p0.i64(ptr align 1 [[GEP_L0]], i64 [[TMP1]], <8 x i1> splat (i1 true), i32 8)
+; CHECK-NEXT:    store <8 x i16> [[TMP2]], ptr [[GEP_S0]], align 1
 ; CHECK-NEXT:    ret void
 ;
   %gep_l0 = getelementptr inbounds i8, ptr %pl, i64 0
@@ -188,13 +161,11 @@ define void @unaligned_rt_stride_revec(ptr %pl, ptr %ps, i64 %stride) {
 ; CHECK-LABEL: define void @unaligned_rt_stride_revec(
 ; CHECK-SAME: ptr [[PL:%.*]], ptr [[PS:%.*]], i64 [[STRIDE:%.*]]) #[[ATTR0]] {
 ; CHECK-NEXT:    [[GEP_L0:%.*]] = getelementptr inbounds i8, ptr [[PL]], i64 0
-; CHECK-NEXT:    [[GEP_L1:%.*]] = getelementptr inbounds i8, ptr [[PL]], i64 [[STRIDE]]
-; CHECK-NEXT:    [[LOAD0:%.*]] = load <4 x i16>, ptr [[GEP_L0]], align 1
-; CHECK-NEXT:    [[LOAD1:%.*]] = load <4 x i16>, ptr [[GEP_L1]], align 1
 ; CHECK-NEXT:    [[GEP_S0:%.*]] = getelementptr inbounds i8, ptr [[PS]], i64 0
-; CHECK-NEXT:    [[GEP_S1:%.*]] = getelementptr inbounds i8, ptr [[PS]], i64 8
-; CHECK-NEXT:    store <4 x i16> [[LOAD0]], ptr [[GEP_S0]], align 1
-; CHECK-NEXT:    store <4 x i16> [[LOAD1]], ptr [[GEP_S1]], align 1
+; CHECK-NEXT:    [[TMP1:%.*]] = mul i64 [[STRIDE]], 1
+; CHECK-NEXT:    [[TMP2:%.*]] = call <2 x i64> @llvm.experimental.vp.strided.load.v2i64.p0.i64(ptr align 1 [[GEP_L0]], i64 [[TMP1]], <2 x i1> splat (i1 true), i32 2)
+; CHECK-NEXT:    [[TMP3:%.*]] = bitcast <2 x i64> [[TMP2]] to <8 x i16>
+; CHECK-NEXT:    store <8 x i16> [[TMP3]], ptr [[GEP_S0]], align 1
 ; CHECK-NEXT:    ret void
 ;
   %gep_l0 = getelementptr inbounds i8, ptr %pl, i64 0
@@ -216,13 +187,11 @@ define void @unaligned_rt_stride_revec_same_scalar_type(ptr %pl, ptr %ps, i64 %s
 ; CHECK-LABEL: define void @unaligned_rt_stride_revec_same_scalar_type(
 ; CHECK-SAME: ptr [[PL:%.*]], ptr [[PS:%.*]], i64 [[STRIDE:%.*]]) #[[ATTR0]] {
 ; CHECK-NEXT:    [[GEP_L0:%.*]] = getelementptr inbounds i8, ptr [[PL]], i64 0
-; CHECK-NEXT:    [[GEP_L1:%.*]] = getelementptr inbounds i8, ptr [[PL]], i64 [[STRIDE]]
-; CHECK-NEXT:    [[LOAD0:%.*]] = load <8 x i8>, ptr [[GEP_L0]], align 1
-; CHECK-NEXT:    [[LOAD1:%.*]] = load <8 x i8>, ptr [[GEP_L1]], align 1
 ; CHECK-NEXT:    [[GEP_S0:%.*]] = getelementptr inbounds i8, ptr [[PS]], i64 0
-; CHECK-NEXT:    [[GEP_S1:%.*]] = getelementptr inbounds i8, ptr [[PS]], i64 8
-; CHECK-NEXT:    store <8 x i8> [[LOAD0]], ptr [[GEP_S0]], align 1
-; CHECK-NEXT:    store <8 x i8> [[LOAD1]], ptr [[GEP_S1]], align 1
+; CHECK-NEXT:    [[TMP1:%.*]] = mul i64 [[STRIDE]], 1
+; CHECK-NEXT:    [[TMP2:%.*]] = call <2 x i64> @llvm.experimental.vp.strided.load.v2i64.p0.i64(ptr align 1 [[GEP_L0]], i64 [[TMP1]], <2 x i1> splat (i1 true), i32 2)
+; CHECK-NEXT:    [[TMP3:%.*]] = bitcast <2 x i64> [[TMP2]] to <16 x i8>
+; CHECK-NEXT:    store <16 x i8> [[TMP3]], ptr [[GEP_S0]], align 1
 ; CHECK-NEXT:    ret void
 ;
   %gep_l0 = getelementptr inbounds i8, ptr %pl, i64 0
