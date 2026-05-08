@@ -1,3 +1,10 @@
+// Need store scalars that are externally used as well as the external uses
+// keep subtree cost part
+// keep single use stuff
+// do the calculations after
+// on second pass, don't collect more data
+// only two passes
+
 //===- SLPVectorizer.cpp - A bottom up SLP Vectorizer ---------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
@@ -332,6 +339,160 @@ static unsigned getNumElements(Type *Ty) {
     return VecTy->getNumElements();
   return 1;
 }
+
+class MergedTreeManager {
+public:
+  // TODO: Find a better place for this, remove duplications
+  using ValueList = SmallVector<Value *, 8>;
+
+  struct ExtractElementNode {
+    // Parent Tree which this node belongs too
+    int Parent;
+
+    // Other nodes that use the same data as this node
+    // May or may not be part of the same tree
+    SmallVector<unsigned> ConnectedNodes;
+
+    ValueList Scalars;
+    ValueList InternalUsers;
+
+    InstructionCost SubtreeCost = 0;
+
+    // How much did extracting the node cost the parent tree
+    InstructionCost ExternalCost = 0;
+    unsigned PartnerNodeIdx = 0;
+
+    // How much does the vectorization of this tree cost
+    // This includes the cost of extractions
+    InstructionCost TotalCost = 0;
+  };
+
+  // Is this active
+  bool Status = true;
+
+  // Contains all nodes of all trees
+  SmallVector<ExtractElementNode, 8> AllNodes;
+
+  // For a given set of Scalars, return all the nodes with the same signature
+  DenseMap<ValueList, unsigned> CachedExtChains;
+
+  // What is the current chain which we are cosidering
+  int CurrentNode = -1;
+
+  // Tell the BoUpSLP to ignore extract costs (when forcing vectorization)
+  bool IgnoreExtractCost = false;
+
+  // Clear all saved chains
+  // Do this whenever the chain information becomes stale, which occurs either
+  // when We re-enter the run() call or when a vectorization actually occurs
+  void reset() {
+    CachedExtChains.clear();
+    CurrentNode = -1;
+    AllNodes.clear();
+  }
+
+  // Add to the external cost of the current node
+  void incrementNodeCost(const InstructionCost Cost) {
+    assert(Status);
+    if (CurrentNode != -1)
+      AllNodes[CurrentNode].ExternalCost += Cost;
+  }
+
+  void setSubtreeCost(SmallVector<Value *, 8> &S,
+                      const InstructionCost SubtreeCost) {
+    assert(Status);
+    if (CachedExtChains.find(S) != CachedExtChains.end()) {
+      AllNodes[CachedExtChains[S]].SubtreeCost = SubtreeCost;
+    }
+  }
+  bool CurrTreeAdjust = false;
+  // Remove the external costs from the current trees cost if
+  // the external chains can be vectorized
+  InstructionCost adjustTotalCost(InstructionCost Cost) {
+    if (CurrentNode != -1) {
+      AllNodes[CurrentNode].TotalCost = Cost;
+      if (CurrTreeAdjust) {
+        Cost -= AllNodes[CurrentNode].ExternalCost;
+        CurrentNode = -1;
+        AllNodes.pop_back();
+      } else if (Cost >= -SLPCostThreshold) {
+        CurrentNode = -1;
+        AllNodes.pop_back();
+      }
+    }
+    return Cost;
+  }
+
+  bool RunAgain = false;
+
+  // Add a new node to the current tree
+  bool addNode(ValueList &InternalUsers, ValueList &Scalars) {
+    assert(Status);
+    // Make sure all nodes have just 2 users
+    if (any_of(Scalars, [](Value *V) {
+          llvm::SmallPtrSet<const llvm::User *, 8> Seen;
+          for (auto *U : V->users())
+            Seen.insert(U);
+          return Seen.size() != 2;
+        }))
+      return false;
+    if (InternalUsers.size() == 0)
+      return false;
+
+    // If no current tree, create one
+    if (CurrentNode == -1) {
+      AllNodes.emplace_back();
+      CurrentNode = AllNodes.size() - 1;
+    } else {
+      // Only allow one Node per vectorization attempt
+      // TODO: Only care about first intersection
+      AllNodes.pop_back();
+      CurrentNode = -1;
+      return false;
+    }
+    ExtractElementNode &Node = AllNodes.back();
+    Node.Scalars = Scalars;
+    Node.InternalUsers = InternalUsers;
+
+    if (CachedExtChains.find(Scalars) == CachedExtChains.end()) {
+      CachedExtChains[Scalars] = CurrentNode;
+      return false;
+    }
+
+    unsigned PartnerNodeIdx = CachedExtChains[Scalars];
+    auto &PartnerNode = AllNodes[PartnerNodeIdx];
+
+    // Make sure the internal users are unique from the external users
+    // Want to make sure this other Node isn't actually sharing Users
+    // TODO: make sure not Gather
+    if (any_of(PartnerNode.InternalUsers, [&](Value *V) {
+          return std::find(Node.InternalUsers.begin(), Node.InternalUsers.end(),
+                           V) != Node.InternalUsers.end();
+        }))
+      return false;
+
+    InstructionCost ForestCost = PartnerNode.TotalCost -
+                                 PartnerNode.ExternalCost -
+                                 PartnerNode.SubtreeCost;
+    // Check that the initial tree will be profitable when revisited/truncated
+    if (ForestCost >= -SLPCostThreshold) {
+      CurrentNode = -1;
+      AllNodes.pop_back();
+      return false;
+    }
+    RunAgain = true;
+    CurrTreeAdjust = true;
+
+    Node.PartnerNodeIdx = PartnerNodeIdx;
+    return true;
+  }
+
+  // Get ready to start tracking a new tree
+  void resetCurrentTree() {
+    CurrentNode = -1;
+    CurrTreeAdjust = false;
+  }
+};
 
 /// \returns the vector type of ScalarTy based on vectorization factor.
 static FixedVectorType *getWidenedType(Type *ScalarTy, unsigned VF) {
@@ -3888,6 +4049,7 @@ public:
                          OrdersType &ReorderIndices) const;
 
   ~BoUpSLP();
+  MergedTreeManager MTM;
 
 private:
   /// Determine if a node \p E in can be demoted to a smaller type with a
@@ -9524,8 +9686,16 @@ Instruction *BoUpSLP::getRootEntryInstruction(const TreeEntry &Entry) const {
 
 void BoUpSLP::buildExternalUses(
     const ExtraValueToDebugLocsMap &ExternallyUsedValues) {
+  if (MTM.Status)
+    MTM.resetCurrentTree();
   const size_t NumVectScalars = ScalarToTreeEntries.size() + 1;
   DenseMap<Value *, unsigned> ScalarToExtUses;
+  bool CanVectorizeExtracts = true;
+  // Vector of Users in the current tree
+  ValueList InternalUsers;
+  ValueList Scalars;
+  TreeEntry *ExtEntry = nullptr;
+
   // Collect the values that we need to extract from the tree.
   for (auto &TEPtr : VectorizableTree) {
     TreeEntry *Entry = TEPtr.get();
@@ -9536,16 +9706,26 @@ void BoUpSLP::buildExternalUses(
         TransformedToGatherNodes.contains(Entry))
       continue;
 
+    // Which entries in this chain also use this data
+    SmallPtrSet<TreeEntry *, 1> InternalTreeUsers;
+
+    // Ignore values are internally used
+    ValueList IgnoreUsers;
+
     // For each lane:
     for (int Lane = 0, LE = Entry->Scalars.size(); Lane != LE; ++Lane) {
       Value *Scalar = Entry->Scalars[Lane];
-      if (!isa<Instruction>(Scalar) || Entry->isCopyableElement(Scalar))
+      if (!isa<Instruction>(Scalar) || Entry->isCopyableElement(Scalar)) {
+        CanVectorizeExtracts = false;
         continue;
+      }
 
       // All uses must be replaced already? No need to do it again.
       auto It = ScalarToExtUses.find(Scalar);
-      if (It != ScalarToExtUses.end() && !ExternalUses[It->second].User)
+      if (It != ScalarToExtUses.end() && !ExternalUses[It->second].User) {
+        CanVectorizeExtracts = false;
         continue;
+      }
 
       if (Scalar->hasNUsesOrMore(NumVectScalars)) {
         unsigned FoundLane = Entry->findLaneForValue(Scalar);
@@ -9554,6 +9734,7 @@ void BoUpSLP::buildExternalUses(
         It = ScalarToExtUses.try_emplace(Scalar, ExternalUses.size()).first;
         ExternalUses.emplace_back(Scalar, nullptr, *Entry, FoundLane);
         ExternalUsesWithNonUsers.insert(Scalar);
+        CanVectorizeExtracts = false;
         continue;
       }
 
@@ -9565,9 +9746,10 @@ void BoUpSLP::buildExternalUses(
                           << FoundLane << " from " << *Scalar << ".\n");
         ScalarToExtUses.try_emplace(Scalar, ExternalUses.size());
         ExternalUses.emplace_back(Scalar, nullptr, *Entry, FoundLane);
+        CanVectorizeExtracts = false;
         continue;
       }
-      for (User *U : Scalar->users()) {
+      for (auto *U : Scalar->users()) {
         LLVM_DEBUG(dbgs() << "SLP: Checking user:" << *U << ".\n");
 
         Instruction *UserInst = dyn_cast<Instruction>(U);
@@ -9575,8 +9757,10 @@ void BoUpSLP::buildExternalUses(
           continue;
 
         // Ignore users in the user ignore list.
-        if (UserIgnoreList && UserIgnoreList->contains(UserInst))
+        if (UserIgnoreList && UserIgnoreList->contains(UserInst)) {
+          IgnoreUsers.push_back(UserInst);
           continue;
+        }
 
         // Skip in-tree scalars that become vectors
         if (ArrayRef<TreeEntry *> UseEntries = getTreeEntries(U);
@@ -9606,11 +9790,21 @@ void BoUpSLP::buildExternalUses(
                              return UseEntry->isGather();
                            }) &&
                    "Bad state");
+            if (UseEntries.size() > 1) {
+              CanVectorizeExtracts = false;
+            } else {
+              for (auto *T : UseEntries) {
+                if (!ExtEntry && Lane == 0) {
+                  InternalUsers = T->Scalars;
+                }
+              }
+            }
             continue;
           }
           U = nullptr;
           if (It != ScalarToExtUses.end()) {
             ExternalUses[It->second].User = nullptr;
+            CanVectorizeExtracts = false;
             break;
           }
         }
@@ -9626,9 +9820,23 @@ void BoUpSLP::buildExternalUses(
         ExternalUsesWithNonUsers.insert(Scalar);
         if (!U)
           break;
+        if (!ExtEntry || ExtEntry == Entry)
+          ExtEntry = Entry;
+        else
+          CanVectorizeExtracts = false;
       }
     }
+
+    // Ignore users are internal reduction values
+    if (IgnoreUsers.size()) {
+      if (InternalUsers.size())
+        CanVectorizeExtracts = false;
+      else
+        InternalUsers = IgnoreUsers;
+    }
   }
+  if (MTM.Status && CanVectorizeExtracts && ExtEntry)
+    MTM.CurrTreeAdjust = MTM.addNode(InternalUsers, ExtEntry->Scalars);
 }
 
 SmallVector<SmallVector<StoreInst *>>
@@ -18790,8 +18998,13 @@ InstructionCost BoUpSLP::calculateTreeCostAndTrimNonProfitable(
   };
   PriorityQueue<CostIndicesTy, SmallVector<CostIndicesTy>, FirstGreater>
       Worklist;
-  for (const auto [Idx, P] : enumerate(SubtreeCosts))
+  for (const auto [Idx, P] : enumerate(SubtreeCosts)) {
     Worklist.emplace(VectorizableTree[Idx].get(), P);
+    // HELP
+    if (MTM.Status && MTM.CurrentNode != -1)
+      if (VectorizableTree[Idx]->State != TreeEntry::NeedToGather)
+        MTM.setSubtreeCost(VectorizableTree[Idx]->Scalars, std::get<0>(P));
+  }
 
   // Narrow store trees with non-profitable immediate values - exit.
   if (!UserIgnoreList && VectorizableTree.front()->getVectorFactor() < MinVF &&
@@ -18833,7 +19046,6 @@ InstructionCost BoUpSLP::calculateTreeCostAndTrimNonProfitable(
 
     // Calculate the gather cost of the root node.
     InstructionCost TotalSubtreeCost = std::get<0>(Worklist.top().second);
-    InstructionCost SubtreeCost = std::get<1>(Worklist.top().second);
     if (TotalSubtreeCost < TE->Scalars.size()) {
       Worklist.pop();
       continue;
@@ -18843,9 +19055,7 @@ InstructionCost BoUpSLP::calculateTreeCostAndTrimNonProfitable(
         auto It = TransformedToGatherNodes.find(VectorizableTree[Idx].get());
         if (It != TransformedToGatherNodes.end()) {
           TotalSubtreeCost -= std::get<0>(SubtreeCosts[Idx]);
-          SubtreeCost -= std::get<1>(SubtreeCosts[Idx]);
           TotalSubtreeCost += It->second;
-          SubtreeCost += It->second;
         }
       }
     }
@@ -19177,6 +19387,10 @@ InstructionCost BoUpSLP::getTreeCost(InstructionCost TreeCost,
     ScalarUserAndIdx.emplace_back(EU.Scalar, EU.User, EU.Lane);
   }
   SmallDenseSet<std::pair<Value *, Value *>, 8> CheckedScalarUser;
+
+  // Track each set of Scalars in play (part of current tree)
+  // If external use matches Scalar, add Cost
+  // Can only ignore if other tree's are profitable with the changs
   for (ExternalUser &EU : ExternalUses) {
     LLVM_DEBUG(dbgs() << "SLP: Computing cost for external use of TreeEntry "
                       << EU.E.Idx << " in lane " << EU.Lane << "\n");
@@ -19315,6 +19529,10 @@ InstructionCost BoUpSLP::getTreeCost(InstructionCost TreeCost,
       LLVM_DEBUG(dbgs() << "  ExtractElement cost for " << *ScalarTy << " from "
                         << *VecTy << ": " << ExtraCost << "\n");
     }
+    if (MTM.Status) {
+      MTM.incrementNodeCost(ExtraCost);
+    }
+
     // Leave the scalar instructions as is if they are cheaper than extracts.
     if (Entry->Idx != 0 || Entry->getOpcode() == Instruction::GetElementPtr ||
         Entry->getOpcode() == Instruction::Load) {
@@ -19691,6 +19909,8 @@ InstructionCost BoUpSLP::getTreeCost(InstructionCost TreeCost,
     ViewGraph(this, "SLP" + F->getName(), false, Str);
 #endif
 
+  if (MTM.Status)
+    Cost = MTM.adjustTotalCost(Cost);
   return Cost;
 }
 
@@ -26492,7 +26712,14 @@ PreservedAnalyses SLPVectorizerPass::run(Function &F, FunctionAnalysisManager &A
   auto *DB = &AM.getResult<DemandedBitsAnalysis>(F);
   auto *ORE = &AM.getResult<OptimizationRemarkEmitterAnalysis>(F);
 
-  bool Changed = runImpl(F, SE, TTI, TLI, AA, LI, DT, AC, DB, ORE);
+  bool RunAgain = false;
+  bool Changed = runImpl(F, SE, TTI, TLI, AA, LI, DT, AC, DB, ORE, RunAgain);
+  if (RunAgain) {
+    bool FoundExtracted =
+        runImpl(F, SE, TTI, TLI, AA, LI, DT, AC, DB, ORE, RunAgain);
+    //    assert(FoundExtracted && "MTM expected more vectorization");
+    Changed |= FoundExtracted;
+  }
   if (!Changed)
     return PreservedAnalyses::all();
 
@@ -26506,7 +26733,8 @@ bool SLPVectorizerPass::runImpl(Function &F, ScalarEvolution *SE_,
                                 TargetLibraryInfo *TLI_, AAResults *AA_,
                                 LoopInfo *LI_, DominatorTree *DT_,
                                 AssumptionCache *AC_, DemandedBits *DB_,
-                                OptimizationRemarkEmitter *ORE_) {
+                                OptimizationRemarkEmitter *ORE_,
+                                bool &RunAgain) {
   if (!RunSLPVectorization)
     return false;
   SE = SE_;
@@ -26580,6 +26808,8 @@ bool SLPVectorizerPass::runImpl(Function &F, ScalarEvolution *SE_,
     R.optimizeGatherSequence();
     LLVM_DEBUG(dbgs() << "SLP: vectorized \"" << F.getName() << "\"\n");
   }
+  R.MTM.Status = false;
+  RunAgain = R.MTM.RunAgain;
   return Changed;
 }
 
@@ -28832,6 +29062,7 @@ public:
           }
           continue;
         }
+        V.MTM.reset();
 
         LLVM_DEBUG(dbgs() << "SLP: Vectorizing horizontal reduction at cost:"
                           << Cost << ". (HorRdx)\n");
