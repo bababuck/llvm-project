@@ -27,8 +27,7 @@ define void @wrap_mul4(ptr nocapture %Out, ptr nocapture readonly %A, ptr nocapt
 ; CHECK-NEXT:    [[TMP7:%.*]] = shufflevector <4 x double> [[TMP6]], <4 x double> poison, <4 x i32> zeroinitializer
 ; CHECK-NEXT:    [[TMP8:%.*]] = fmul <4 x double> [[TMP7]], [[TMP5]]
 ; CHECK-NEXT:    [[TMP9:%.*]] = fadd <4 x double> [[TMP4]], [[TMP8]]
-; CHECK-NEXT:    store <4 x double> [[TMP9]], ptr [[OUT:%.*]], align 8
-; CHECK-NEXT:    [[RES_I_SROA_7_0_OUT2_I_SROA_IDX8:%.*]] = getelementptr inbounds double, ptr [[OUT]], i64 4
+; CHECK-NEXT:    [[RES_I_SROA_7_0_OUT2_I_SROA_IDX8:%.*]] = getelementptr inbounds double, ptr [[OUT:%.*]], i64 4
 ; CHECK-NEXT:    [[TMP10:%.*]] = insertelement <4 x double> poison, double [[TEMP10]], i32 0
 ; CHECK-NEXT:    [[TMP11:%.*]] = shufflevector <4 x double> [[TMP10]], <4 x double> poison, <4 x i32> zeroinitializer
 ; CHECK-NEXT:    [[TMP12:%.*]] = fmul <4 x double> [[TMP1]], [[TMP11]]
@@ -36,6 +35,7 @@ define void @wrap_mul4(ptr nocapture %Out, ptr nocapture readonly %A, ptr nocapt
 ; CHECK-NEXT:    [[TMP14:%.*]] = shufflevector <4 x double> [[TMP13]], <4 x double> poison, <4 x i32> zeroinitializer
 ; CHECK-NEXT:    [[TMP15:%.*]] = fmul <4 x double> [[TMP5]], [[TMP14]]
 ; CHECK-NEXT:    [[TMP16:%.*]] = fadd <4 x double> [[TMP12]], [[TMP15]]
+; CHECK-NEXT:    store <4 x double> [[TMP9]], ptr [[OUT]], align 8
 ; CHECK-NEXT:    store <4 x double> [[TMP16]], ptr [[RES_I_SROA_7_0_OUT2_I_SROA_IDX8]], align 8
 ; CHECK-NEXT:    ret void
 ;

@@ -15,8 +15,8 @@ define void @test_commutative(ptr %arr1, ptr %arr2, i32 %a0, i32 %a1, i32 %a2, i
 ; CHECK-NEXT:    [[T2:%.*]] = load i32, ptr [[GEP2_2]], align 4
 ; CHECK-NEXT:    [[T3:%.*]] = load i32, ptr [[GEP2_3]], align 4
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <8 x i32>, ptr [[ARR3:%.*]], align 4
-; CHECK-NEXT:    [[TMP0:%.*]] = load <4 x i32>, ptr [[ARR1]], align 4
 ; CHECK-NEXT:    [[TMP2:%.*]] = shufflevector <8 x i32> [[TMP1]], <8 x i32> poison, <2 x i32> <i32 1, i32 2>
+; CHECK-NEXT:    [[TMP0:%.*]] = load <4 x i32>, ptr [[ARR1]], align 4
 ; CHECK-NEXT:    [[TMP3:%.*]] = add nsw <2 x i32> [[TMP2]], [[TMP2]]
 ; CHECK-NEXT:    br label [[BB2:%.*]]
 ; CHECK:       bb2:
