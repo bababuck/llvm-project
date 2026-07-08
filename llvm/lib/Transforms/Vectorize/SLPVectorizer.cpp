@@ -1029,6 +1029,16 @@ static bool isValidForAlternation(unsigned Opcode) {
   return !Instruction::isIntDivRem(Opcode);
 }
 
+static bool isDeferredExtractable(Value *V) {
+  if (isa<LoadInst>(V))
+    return true;
+  if (auto *CI = dyn_cast<CastInst>(V)) {
+    auto *LI = dyn_cast<LoadInst>(CI->getOperand(0));
+    return LI && LI->hasOneUse();
+  }
+  return false;
+}
+
 namespace {
 
 /// Helper class that determines VL can use the same opcode.
@@ -20176,7 +20186,10 @@ InstructionCost BoUpSLP::getTreeCost(InstructionCost TreeCost,
     // Track cases where extraction is more profitable and convert those to
     // extracts in a late cleanup step.
     if (Entry->Idx != 0 || Entry->getOpcode() == Instruction::GetElementPtr ||
-        Entry->getOpcode() == Instruction::Load) {
+        Entry->getOpcode() == Instruction::Load ||
+        (Entry->getOpcode() == Instruction::ZExt &&
+         getOperandEntry(Entry, 0)->getOperations().valid() &&
+         getOperandEntry(Entry, 0)->getOpcode() == Instruction::Load)) {
       // Checks if the user of the external scalar is phi in loop body.
       auto IsPhiInLoop = [&](const ExternalUser &U) {
         if (auto *Phi = dyn_cast_if_present<PHINode>(U.User)) {
@@ -20255,7 +20268,7 @@ InstructionCost BoUpSLP::getTreeCost(InstructionCost TreeCost,
         if (IsProfitablePHIUser) {
           KeepScalar = true;
         } else if (KeepScalar &&
-                   (!isa<LoadInst>(EU.Scalar) ||
+                   (!isDeferredExtractable(EU.Scalar) ||
                     isa<VectorType>(EU.Scalar->getType())) &&
                    ScalarCost != TTI::TCC_Free &&
                    ExtraCost - ScalarCost <= TTI::TCC_Basic &&
@@ -20309,7 +20322,7 @@ InstructionCost BoUpSLP::getTreeCost(InstructionCost TreeCost,
               }
             }
           }
-        } else if (isa<LoadInst>(EU.Scalar) &&
+        } else if (isDeferredExtractable(EU.Scalar) &&
                    !isa<VectorType>(EU.Scalar->getType())) {
           ExternalUsesAsExtract.insert(EU.Scalar);
           auto [ItCost, Inserted] =
@@ -23522,6 +23535,60 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
       ICmp->setSameSign(/*B=*/false);
     return I;
   };
+  auto TryExtract = [&]() -> Value * {
+    if (!all_of(E->Scalars, [&](const Value *Scalar) -> bool {
+          return CouldBeExtract.count(Scalar);
+        }))
+      return nullptr;
+
+    SmallVector<int> ExtractShuffleMask(E->Scalars.size());
+    auto *BaseEE = CouldBeExtract.lookup(E->Scalars[0]);
+    if (!BaseEE)
+      return nullptr;
+    Value *BaseVec = BaseEE->getVectorOperand();
+    for (auto [Idx, S] : enumerate(E->Scalars)) {
+      auto *EE = CouldBeExtract.lookup(S);
+      Value *Vec = EE->getVectorOperand();
+      if (Vec != BaseVec)
+        return nullptr;
+      std::optional<unsigned> Lane = getExtractIndex(EE);
+      if (!Lane)
+        return nullptr;
+      ExtractShuffleMask[Idx] = *Lane;
+    }
+    SmallVector<int> ReorderMask(E->Scalars.size());
+    if (E->ReorderIndices.empty())
+      std::swap(ExtractShuffleMask, ReorderMask);
+    else
+      for (auto [Lane, Idx] : enumerate(E->ReorderIndices))
+        ReorderMask[Lane] = ExtractShuffleMask[Idx];
+
+    unsigned ParentNumElts =
+        cast<FixedVectorType>(BaseVec->getType())->getNumElements();
+    if (ShuffleVectorInst::isIdentityMask(ReorderMask, ParentNumElts)) {
+      if (E->ReuseShuffleIndices.empty()) {
+        E->VectorizedValue = BaseVec;
+        return BaseVec;
+      } else {
+        Value *V = Builder.CreateShuffleVector(BaseVec, E->ReuseShuffleIndices);
+        E->VectorizedValue = V;
+        return V;
+      }
+    }
+    if (E->ReuseShuffleIndices.empty()) {
+      Value *V = Builder.CreateShuffleVector(BaseVec, ReorderMask);
+      E->VectorizedValue = V;
+      return V;
+    }
+
+    SmallVector<int> ReuseMask(E->ReuseShuffleIndices.size());
+    for (auto [Lane, Idx] : enumerate(E->ReuseShuffleIndices))
+      ReuseMask[Lane] = ReorderMask[Idx];
+
+    Value *V = Builder.CreateShuffleVector(BaseVec, ReuseMask);
+    E->VectorizedValue = V;
+    return V;
+  };
   switch (ShuffleOrOp) {
     case Instruction::PHI: {
       assert((E->ReorderIndices.empty() || !E->ReuseShuffleIndices.empty() ||
@@ -23803,6 +23870,19 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
       return V;
     }
     case Instruction::ZExt:
+      setInsertPointAfterBundle(E);
+      if (auto *Vec = TryExtract()) {
+        TreeEntry *CastIn = getOperandEntry(E, 0);
+        DeletedNodes.insert(CastIn);
+        TransformedToGatherNodes.erase(CastIn);
+        for (auto &P : CastIn->CombinedEntriesWithIndices) {
+          auto *CombTE = VectorizableTree[P.first].get();
+          DeletedNodes.insert(CombTE);
+          TransformedToGatherNodes.erase(CombTE);
+        }
+        return Vec;
+      }
+      [[fallthrough]];
     case Instruction::SExt:
     case Instruction::FPToUI:
     case Instruction::FPToSI:
@@ -24054,61 +24134,6 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
       // sink them all the way down past store instructions.
       setInsertPointAfterBundle(E);
 
-      auto TryExtract = [&]() -> Value * {
-        if (!all_of(E->Scalars, [&](const Value *Scalar) -> bool {
-              return CouldBeExtract.count(Scalar);
-            }))
-          return nullptr;
-
-        SmallVector<int> ExtractShuffleMask(E->Scalars.size());
-        auto *BaseEE = CouldBeExtract.lookup(E->Scalars[0]);
-        if (!BaseEE)
-          return nullptr;
-        Value *BaseVec = BaseEE->getVectorOperand();
-        for (auto [Idx, S] : enumerate(E->Scalars)) {
-          auto *EE = CouldBeExtract.lookup(S);
-          Value *Vec = EE->getVectorOperand();
-          if (Vec != BaseVec)
-            return nullptr;
-          std::optional<unsigned> Lane = getExtractIndex(EE);
-          if (!Lane)
-            return nullptr;
-          ExtractShuffleMask[Idx] = *Lane;
-        }
-        SmallVector<int> ReorderMask(E->Scalars.size());
-        if (E->ReorderIndices.empty())
-          std::swap(ExtractShuffleMask, ReorderMask);
-        else
-          for (auto [Lane, Idx] : enumerate(E->ReorderIndices))
-            ReorderMask[Lane] = ExtractShuffleMask[Idx];
-
-        unsigned ParentNumElts =
-            cast<FixedVectorType>(BaseVec->getType())->getNumElements();
-        if (ShuffleVectorInst::isIdentityMask(ReorderMask, ParentNumElts)) {
-          if (E->ReuseShuffleIndices.empty()) {
-            E->VectorizedValue = BaseVec;
-            return BaseVec;
-          } else {
-            Value *V =
-                Builder.CreateShuffleVector(BaseVec, E->ReuseShuffleIndices);
-            E->VectorizedValue = V;
-            return V;
-          }
-        }
-        if (E->ReuseShuffleIndices.empty()) {
-          Value *V = Builder.CreateShuffleVector(BaseVec, ReorderMask);
-          E->VectorizedValue = V;
-          return V;
-        }
-
-        SmallVector<int> ReuseMask(E->ReuseShuffleIndices.size());
-        for (auto [Lane, Idx] : enumerate(E->ReuseShuffleIndices))
-          ReuseMask[Lane] = ReorderMask[Idx];
-
-        Value *V = Builder.CreateShuffleVector(BaseVec, ReuseMask);
-        E->VectorizedValue = V;
-        return V;
-      };
       if (auto *Vec = TryExtract())
         return Vec;
       LoadInst *LI = cast<LoadInst>(VL0);
@@ -25078,6 +25103,7 @@ Value *BoUpSLP::vectorizeTree(
       } else {
         Builder.SetInsertPoint(&F->getEntryBlock(), F->getEntryBlock().begin());
       }
+      bool IsDeferredExtractable = isDeferredExtractable(Scalar);
       Value *NewInst = ExtractAndExtendIfNeeded(Vec);
       // Required to update internally referenced instructions.
       if (Scalar != NewInst) {
@@ -25088,7 +25114,7 @@ Value *BoUpSLP::vectorizeTree(
       }
       auto *Inst = dyn_cast<Instruction>(Scalar);
       if (Inst && ExternalUsesAsOriginalScalar.contains(Inst) &&
-          isa<LoadInst>(Scalar) && !isa<VectorType>(Scalar->getType())) {
+          IsDeferredExtractable && !isa<VectorType>(Scalar->getType())) {
         if (!CouldBeExtract.contains(NewInst)) {
           ExtractAnyways = true;
           auto *ReplacedExtract = ExtractAndExtendIfNeeded(Vec);
@@ -25189,6 +25215,7 @@ Value *BoUpSLP::vectorizeTree(
         }
       } else {
         Builder.SetInsertPoint(cast<Instruction>(User));
+        bool IsDeferredExtractable = isDeferredExtractable(Scalar);
         Value *NewInst = ExtractAndExtendIfNeeded(Vec);
         if (isa<StructType>(Scalar->getType()) &&
             isa_and_nonnull<ExtractValueInst>(User) &&
@@ -25202,7 +25229,7 @@ Value *BoUpSLP::vectorizeTree(
         }
         auto *Inst = dyn_cast<Instruction>(Scalar);
         if (Inst && ExternalUsesAsOriginalScalar.contains(Inst) &&
-            isa<LoadInst>(Scalar) && !isa<VectorType>(Scalar->getType())) {
+            IsDeferredExtractable && !isa<VectorType>(Scalar->getType())) {
           if (!CouldBeExtract.contains(NewInst)) {
             ExtractAnyways = true;
             auto *ReplacedExtract = ExtractAndExtendIfNeeded(Vec);
