@@ -25047,10 +25047,14 @@ Value *BoUpSLP::vectorizeTree(
       VectorToInsertElement.try_emplace(Vec, IE);
       return Vec;
     };
-    auto GetExtractInst = [](Value *V) -> ExtractElementInst * {
-      while (auto *CI = dyn_cast<CastInst>(V))
+    auto GetExtractInst = [](Value *V, Value *NewInst) -> std::pair<ExtractElementInst *, Value*> {
+      while (auto *CI = dyn_cast<CastInst>(V)) {
         V = CI->getOperand(0);
-      return dyn_cast<ExtractElementInst>(V);
+        auto *NICI = dyn_cast<CastInst>(NewInst);
+        assert(NICI && "Expected NewInst to be a matching CastInst.");
+        NewInst = NICI->getOperand(0);
+      }
+      return {dyn_cast<ExtractElementInst>(V), NewInst};
     };
     // If User == nullptr, the Scalar remains as scalar in vectorized
     // instructions or is used as extra arg. Generate ExtractElement instruction
@@ -25118,14 +25122,14 @@ Value *BoUpSLP::vectorizeTree(
         if (!CouldBeExtract.contains(NewInst)) {
           ExtractAnyways = true;
           auto *ReplacedExtract = ExtractAndExtendIfNeeded(Vec);
-          if (auto *EE = GetExtractInst(ReplacedExtract))
-            CouldBeExtract.try_emplace(NewInst, EE);
+          if (auto P = GetExtractInst(ReplacedExtract, NewInst); P.first)
+            CouldBeExtract.try_emplace(P.second, P.first);
           ExtractAnyways = false;
         }
       } else if (Inst && ExternalUsesAsExtract.contains(Inst))
         if (!CouldBeExtract.contains(Scalar))
-          if (auto *EE = GetExtractInst(NewInst))
-            CouldBeExtract.try_emplace(Scalar, EE);
+          if (auto P = GetExtractInst(NewInst, Scalar); P.first)
+            CouldBeExtract.try_emplace(P.second, P.first);
       continue;
     }
 
@@ -25233,14 +25237,15 @@ Value *BoUpSLP::vectorizeTree(
           if (!CouldBeExtract.contains(NewInst)) {
             ExtractAnyways = true;
             auto *ReplacedExtract = ExtractAndExtendIfNeeded(Vec);
-            if (auto *EE = GetExtractInst(ReplacedExtract))
-              CouldBeExtract.try_emplace(NewInst, EE);
+            if (auto P = GetExtractInst(ReplacedExtract, NewInst); P.first)
+              CouldBeExtract.try_emplace(P.second, P.first);
             ExtractAnyways = false;
           }
         } else if (Inst && ExternalUsesAsExtract.contains(Inst))
           if (!CouldBeExtract.contains(Scalar))
-            if (auto *EE = GetExtractInst(NewInst))
-              CouldBeExtract.try_emplace(Scalar, EE);
+            if (auto P = GetExtractInst(NewInst, Scalar); P.first)
+              CouldBeExtract.try_emplace(P.second, P.first);
+
       }
     } else {
       Builder.SetInsertPoint(&F->getEntryBlock(), F->getEntryBlock().begin());
@@ -25583,9 +25588,21 @@ void BoUpSLP::emitDeferredExtracts() {
     eraseInstruction(I);
   }
   for (const auto &P : CouldBeExtract) {
-    if (auto *Ext = P.second)
-      if (!isDeleted(Ext) && !Ext->getNumUses())
-        eraseInstruction(Ext);
+    if (auto *Ext = P.second) {
+      if (!isDeleted(Ext)) {
+        unsigned NumUses = Ext->getNumUses();
+        if (!NumUses) {
+          eraseInstruction(Ext);
+        } else if (NumUses == 1) {
+          Value *User = Ext->uses().begin()->getUser();
+          if (auto *CI = dyn_cast<CastInst>(User);
+              CI && CI->getNumUses() == 0) {
+            eraseInstruction(CI);
+            eraseInstruction(Ext);
+          }
+        }
+      }
+    }
   }
 }
 
