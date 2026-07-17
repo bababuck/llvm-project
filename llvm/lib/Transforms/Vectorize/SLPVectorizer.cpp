@@ -4771,6 +4771,39 @@ private:
             (Bundle && EntryState != TreeEntry::NeedToGather &&
              EntryState != TreeEntry::SplitVectorize)) &&
            "Need to vectorize gather entry?");
+    auto TryExtract = [&]() -> bool {
+      if (!all_of(VL, [&](const Value *Scalar) -> bool {
+        return CouldBeExtract.count(Scalar);
+      }))
+        return false;
+
+      SmallVector<int> ExtractShuffleMask(VL.size());
+      auto *BaseEE = CouldBeExtract.lookup(VL[0]);
+      if (!BaseEE)
+        return true;
+      Value *BaseVec = BaseEE->getVectorOperand();
+      for (auto [Idx, S] : enumerate(VL)) {
+        auto *EE = CouldBeExtract.lookup(S);
+        Value *Vec = EE->getVectorOperand();
+        if (Vec != BaseVec)
+          return false;
+        std::optional<unsigned> Lane = getExtractIndex(EE);
+        if (!Lane)
+          return false;
+        ExtractShuffleMask[Idx] = *Lane;
+      }
+      return true;
+    };
+    if (EntryState != TreeEntry::NeedToGather &&
+        EntryState != TreeEntry::SplitVectorize)
+      if (TryExtract())
+        for (Value &*V : VL)
+          V = CouldBeExtract.lookup(V);
+    if (EntryState == TreeEntry::NeedToGather)
+      for (Value &*V : VL)
+        if (auto *NewV = CouldBeExtract.lookup(V))
+          V = NewV;
+
     // Gathered loads still gathered? Do not create entry, use the original one.
     if (GatheredLoadsEntriesFirst.has_value() &&
         EntryState == TreeEntry::NeedToGather && S &&
@@ -22249,8 +22282,13 @@ class BoUpSLP::ShuffleInstructionBuilder final : public BaseShuffleAnalysis {
     assert(V1 && "Expected at least one vector value.");
     ShuffleIRBuilder ShuffleBuilder(Builder, R.GatherShuffleExtractSeq,
                                     R.CSEBlocks, *R.DL);
-    return BaseShuffleAnalysis::createShuffle<Value *>(
+    Value *V = BaseShuffleAnalysis::createShuffle<Value *>(
         V1, V2, Mask, ShuffleBuilder, ScalarTy);
+    V1->dump();
+    V->dump();
+    if (auto *LI = dyn_cast<LoadInst>(V1))
+      LI->dump();
+    return V;
   }
 
   /// Cast value \p V to the vector type with the same number of elements, but
@@ -23315,6 +23353,11 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
     if (E->hasState() && E->Idx == 0 && !UserIgnoreList)
       setInsertPointAfterBundle(E);
     Value *Vec = createBuildVector(E, ScalarTy);
+    if (auto *S = dyn_cast<Instruction>(Vec))
+      if (isa<LoadInst>(S->getOperand(0)))
+        S->getOperand(0)->dump();
+    Vec->dump();
+
     E->VectorizedValue = Vec;
     return Vec;
   }
@@ -23563,6 +23606,9 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
       for (auto [Lane, Idx] : enumerate(E->ReorderIndices))
         ReorderMask[Lane] = ExtractShuffleMask[Idx];
 
+    if (isa<LoadInst>(BaseVec))
+      BaseVec->dump();
+    //    Builder.SetInsertPoint(cast<Instruction>(BaseVec)->getNextNode());
     unsigned ParentNumElts =
         cast<FixedVectorType>(BaseVec->getType())->getNumElements();
     if (ShuffleVectorInst::isIdentityMask(ReorderMask, ParentNumElts)) {
@@ -23880,6 +23926,7 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
           DeletedNodes.insert(CombTE);
           TransformedToGatherNodes.erase(CombTE);
         }
+        Vec->dump();
         return Vec;
       }
       [[fallthrough]];
@@ -24132,10 +24179,13 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
     case Instruction::Load: {
       // Loads are inserted at the head of the tree because we don't want to
       // sink them all the way down past store instructions.
-      setInsertPointAfterBundle(E);
-
-      if (auto *Vec = TryExtract())
+      if (auto *Vec = TryExtract()) {
+        if (E->State == TreeEntry::ScatterVectorize)
+          DeletedNodes.insert(getOperandEntry(E, 0));
+        Vec->dump();
         return Vec;
+      }
+      setInsertPointAfterBundle(E);
       LoadInst *LI = cast<LoadInst>(VL0);
       Instruction *NewLI;
       FixedVectorType *StridedLoadTy = nullptr;
@@ -25016,7 +25066,9 @@ Value *BoUpSLP::vectorizeTree(
               Ex = createExtractVector(Builder, Vec, VecTyNumElements,
                                        ExternalUse.Lane * VecTyNumElements);
             } else {
-              Ex = Builder.CreateExtractElement(Vec, Lane);
+              if (isa<LoadInst>(Vec))
+                Vec->dump();
+              Ex = Builder.CreateExtractElement(Vec, Lane); // HELP
             }
           }
           // If necessary, sign-extend or zero-extend ScalarRoot
@@ -26535,9 +26587,11 @@ void BoUpSLP::BlockScheduling::calculateDependencies(
     BundleMember->resetUnscheduledDeps();
     // Handle def-use chain dependencies.
     SmallDenseMap<Value *, unsigned> UserToNumOps;
-    for (User *U : BundleMember->getInst()->users()) {
+    for (User *U : BundleMember->getInst()->users()) { // HERE
       if (isa<PHINode>(U))
         continue;
+      errs() << "HERE\n";
+      U->dump();
       if (ScheduleData *UseSD = getScheduleData(U)) {
         // The operand is a copyable element - skip.
         unsigned &NumOps = UserToNumOps.try_emplace(U, 0).first->getSecond();
