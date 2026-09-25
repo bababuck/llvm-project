@@ -1230,7 +1230,8 @@ public:
                                   MVT &RegisterVT) const {
     return getVectorTypeBreakdownImpl(Context, VT, IntermediateVT,
                                       NumIntermediates, RegisterVT,
-                                      /*ForCallingConv=*/false);
+                                      /*ForCallingConv=*/false,
+                                      /*AlwaysSplit=*/false);
   }
 
   /// Return true if fixed-length, non-power-of-two vectors should be broken
@@ -1253,7 +1254,8 @@ public:
       unsigned &NumIntermediates, MVT &RegisterVT) const {
     return getVectorTypeBreakdownImpl(Context, VT, IntermediateVT,
                                       NumIntermediates, RegisterVT,
-                                      /*ForCallingConv=*/true);
+                                      /*ForCallingConv=*/true,
+                                      /*AlwaysSplit=*/false);
   }
 
   struct IntrinsicInfo {
@@ -1898,7 +1900,26 @@ public:
   virtual unsigned
   getNumRegisters(LLVMContext &Context, EVT VT,
                   std::optional<MVT> RegisterVT = std::nullopt) const {
-    return getNumRegistersImpl(Context, VT, /*ForCallingConv=*/false);
+    return getNumRegistersImpl(Context, VT, /*ForCallingConv=*/false,
+                               /*AlwaysSplit=*/false);
+  }
+
+  /// Return the number of registers that this ValueType will eventually
+  /// require.
+  ///
+  /// This is one for any types promoted to live in larger registers, but may be
+  /// more than one for types (like i64) that are split into pieces.  For types
+  /// like i140, which are first promoted then expanded, it is the number of
+  /// registers needed to hold all the bits of the original type.  For an i140
+  /// on a 32 bit machine this means 5 registers.
+  ///
+  /// RegisterVT may be passed as a way to override the default settings, for
+  /// instance with i128 inline assembly operands on SystemZ.
+  virtual unsigned getNumRegistersAlwaysSplit(
+      LLVMContext &Context, EVT VT,
+      std::optional<MVT> RegisterVT = std::nullopt) const {
+    return getNumRegistersImpl(Context, VT, /*ForCallingConv=*/false,
+                               /*AlwaysSplit=*/true);
   }
 
   /// Certain combinations of ABIs, Targets and features require that types
@@ -1915,7 +1936,8 @@ public:
   virtual unsigned getNumRegistersForCallingConv(LLVMContext &Context,
                                                  CallingConv::ID CC,
                                                  EVT VT) const {
-    return getNumRegistersImpl(Context, VT, /*ForCallingConv=*/true);
+    return getNumRegistersImpl(Context, VT, /*ForCallingConv=*/true,
+                               /*AlwaysSplit=*/false);
   }
 
   /// Certain targets have context sensitive alignment requirements, where one
@@ -4025,8 +4047,8 @@ private:
   unsigned getVectorTypeBreakdownImpl(LLVMContext &Context, EVT VT,
                                       EVT &IntermediateVT,
                                       unsigned &NumIntermediates,
-                                      MVT &RegisterVT,
-                                      bool ForCallingConv) const;
+                                      MVT &RegisterVT, bool ForCallingConv,
+                                      bool AlwaysSplit) const;
 
   unsigned getVectorTypeBreakdownMVT(MVT VT, MVT &IntermediateVT,
                                      unsigned &NumIntermediates,
@@ -4048,7 +4070,8 @@ private:
       MVT RegisterVT;
       unsigned NumIntermediates;
       (void)getVectorTypeBreakdownImpl(Context, VT, VT1, NumIntermediates,
-                                       RegisterVT, ForCallingConv);
+                                       RegisterVT, ForCallingConv,
+                                       /*AlwaysSplit=*/false);
       return RegisterVT;
     }
     if (VT.isInteger()) {
@@ -4059,7 +4082,7 @@ private:
   }
 
   unsigned getNumRegistersImpl(LLVMContext &Context, EVT VT,
-                               bool ForCallingConv) const {
+                               bool ForCallingConv, bool AlwaysSplit) const {
     if (VT.isSimple() &&
         !shouldUseDynamicVectorTypeBreakdown(VT, ForCallingConv)) {
       assert((unsigned)VT.getSimpleVT().SimpleTy <
@@ -4071,7 +4094,7 @@ private:
       MVT VT2;
       unsigned NumIntermediates;
       return getVectorTypeBreakdownImpl(Context, VT, VT1, NumIntermediates, VT2,
-                                        ForCallingConv);
+                                        ForCallingConv, AlwaysSplit);
     }
     if (VT.isInteger()) {
       unsigned BitWidth = VT.getSizeInBits();
