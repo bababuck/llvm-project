@@ -1688,7 +1688,8 @@ EVT TargetLoweringBase::getSetCCResultType(const DataLayout &DL, LLVMContext &,
 /// before they are promoted/expanded.
 unsigned TargetLoweringBase::getVectorTypeBreakdownImpl(
     LLVMContext &Context, EVT VT, EVT &IntermediateVT,
-    unsigned &NumIntermediates, MVT &RegisterVT, bool ForCallingConv) const {
+    unsigned &NumIntermediates, MVT &RegisterVT, bool ForCallingConv,
+    bool AlwaysSplit) const {
   ElementCount EltCnt = VT.getVectorElementCount();
 
   // If there is a wider vector type with the same element type as this one,
@@ -1749,7 +1750,8 @@ unsigned TargetLoweringBase::getVectorTypeBreakdownImpl(
     assert(VT.isFixedLengthVector() && "Expected a fixed-length vector VT");
     unsigned NumElts = EltCnt.getKnownMinValue();
 
-    if (!ForCallingConv && preferVectorizedNonPowerOfTwoTypeBreakdown())
+    if (!ForCallingConv &&
+        (preferVectorizedNonPowerOfTwoTypeBreakdown() || AlwaysSplit))
       if (std::optional<unsigned> NumRegs = GetLegalVectorBreakdown())
         return *NumRegs;
 

@@ -571,7 +571,7 @@ public:
 
   unsigned getRegUsageForType(Type *Ty) const override {
     EVT ETy = getTLI()->getValueType(DL, Ty);
-    return getTLI()->getNumRegisters(Ty->getContext(), ETy);
+    return getTLI()->getNumRegistersAlwaysSplit(Ty->getContext(), ETy);
   }
 
   InstructionCost getGEPCost(Type *PointeeType, const Value *Ptr,
