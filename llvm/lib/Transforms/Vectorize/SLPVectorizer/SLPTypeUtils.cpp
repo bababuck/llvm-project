@@ -142,6 +142,14 @@ unsigned getNumberOfPartsOrRegs(bool QueryNumParts,
   unsigned ScalarSz = getNumElements(ScalarTy);
   Type *ElementTy = toScalarizedTy(VecTy);
   unsigned PWSz = getFullVectorNumberOfElements(TTI, ElementTy, Sz, ReVec);
+  // If getRegUsageForType scalarizes a non-power-of-2 vector, use the next
+  // power of two size up as an upper bound
+  if (NumParts >= Sz && !QueryNumParts && !isPowerOf2_64(Sz)) {
+    unsigned NewSz = PowerOf2Ceil(Sz);
+    Type *NewVecTy = FixedVectorType::get(ScalarTy->getScalarType(), NewSz);
+    return getNumberOfPartsOrRegs(QueryNumParts, TTI, NewVecTy, ScalarTy, ReVec,
+                                  Limit);
+  }
   if (NumParts >= Sz || PWSz % NumParts != 0 ||
       (PWSz / NumParts) % ScalarSz != 0 ||
       !hasFullVectorsOrPowerOf2(TTI, ElementTy, PWSz / NumParts, ReVec))
