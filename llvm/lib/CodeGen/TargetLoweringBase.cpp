@@ -1743,8 +1743,6 @@ unsigned TargetLoweringBase::getVectorTypeBreakdownImpl(
     report_fatal_error("Don't know how to legalize this scalable vector type");
   }
 
-  // FIXME: We don't generically support non-power-of-2-sized vectors for now.
-  // Ideally we could break down into LHS/RHS like LegalizeDAG does.
   if (!isPowerOf2_32(EltCnt.getKnownMinValue())) {
     assert(VT.isFixedLengthVector() && "Expected a fixed-length vector VT");
     unsigned NumElts = EltCnt.getKnownMinValue();
@@ -1753,9 +1751,9 @@ unsigned TargetLoweringBase::getVectorTypeBreakdownImpl(
       if (std::optional<unsigned> NumRegs = GetLegalVectorBreakdown())
         return *NumRegs;
 
-    // Fall back to scalars if there is no legal vector decomposition.
-    NumVectorRegs = NumElts;
-    EltCnt = ElementCount::getFixed(1);
+    // Widen to larger vector if is no legal vector decomposition.
+    NumElts = bit_ceil(NumElts);
+    VT = EVT::getVectorVT(Context, VT.getVectorElementType(), ElementCount::getFixed(NumElts));
   }
 
   // Divide the input until we get to a supported size.  This will always
