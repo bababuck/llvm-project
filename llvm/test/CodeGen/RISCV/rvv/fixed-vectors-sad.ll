@@ -441,12 +441,11 @@ define signext i32 @sad_2block_16xi8_as_i32(ptr %a, ptr %b, i32 signext %stridea
 ; RV32-NEXT:    vwaddu.vv v10, v13, v12
 ; RV32-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
 ; RV32-NEXT:    vadd.vv v8, v10, v8
-; RV32-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
 ; RV32-NEXT:    vmv.s.x v10, zero
-; RV32-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
-; RV32-NEXT:    vwredsumu.vs v8, v8, v10
-; RV32-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
+; RV32-NEXT:    vredsum.vs v8, v8, v10
 ; RV32-NEXT:    vmv.x.s a0, v8
+; RV32-NEXT:    slli a0, a0, 16
+; RV32-NEXT:    srli a0, a0, 16
 ; RV32-NEXT:    ret
 ;
 ; RV64-LABEL: sad_2block_16xi8_as_i32:
@@ -482,12 +481,11 @@ define signext i32 @sad_2block_16xi8_as_i32(ptr %a, ptr %b, i32 signext %stridea
 ; RV64-NEXT:    vwaddu.vv v10, v13, v12
 ; RV64-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
 ; RV64-NEXT:    vadd.vv v8, v10, v8
-; RV64-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
 ; RV64-NEXT:    vmv.s.x v10, zero
-; RV64-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
-; RV64-NEXT:    vwredsumu.vs v8, v8, v10
-; RV64-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
+; RV64-NEXT:    vredsum.vs v8, v8, v10
 ; RV64-NEXT:    vmv.x.s a0, v8
+; RV64-NEXT:    slli a0, a0, 48
+; RV64-NEXT:    srli a0, a0, 48
 ; RV64-NEXT:    ret
 ;
 ; ZVABD32-LABEL: sad_2block_16xi8_as_i32:
@@ -519,12 +517,11 @@ define signext i32 @sad_2block_16xi8_as_i32(ptr %a, ptr %b, i32 signext %stridea
 ; ZVABD32-NEXT:    vwabdau.vv v10, v12, v15
 ; ZVABD32-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
 ; ZVABD32-NEXT:    vadd.vv v8, v10, v8
-; ZVABD32-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
 ; ZVABD32-NEXT:    vmv.s.x v10, zero
-; ZVABD32-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
-; ZVABD32-NEXT:    vwredsumu.vs v8, v8, v10
-; ZVABD32-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
+; ZVABD32-NEXT:    vredsum.vs v8, v8, v10
 ; ZVABD32-NEXT:    vmv.x.s a0, v8
+; ZVABD32-NEXT:    slli a0, a0, 16
+; ZVABD32-NEXT:    srli a0, a0, 16
 ; ZVABD32-NEXT:    ret
 ;
 ; ZVABD64-LABEL: sad_2block_16xi8_as_i32:
@@ -556,12 +553,11 @@ define signext i32 @sad_2block_16xi8_as_i32(ptr %a, ptr %b, i32 signext %stridea
 ; ZVABD64-NEXT:    vwabdau.vv v10, v12, v15
 ; ZVABD64-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
 ; ZVABD64-NEXT:    vadd.vv v8, v10, v8
-; ZVABD64-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
 ; ZVABD64-NEXT:    vmv.s.x v10, zero
-; ZVABD64-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
-; ZVABD64-NEXT:    vwredsumu.vs v8, v8, v10
-; ZVABD64-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
+; ZVABD64-NEXT:    vredsum.vs v8, v8, v10
 ; ZVABD64-NEXT:    vmv.x.s a0, v8
+; ZVABD64-NEXT:    slli a0, a0, 48
+; ZVABD64-NEXT:    srli a0, a0, 48
 ; ZVABD64-NEXT:    ret
 entry:
   %idx.ext8 = sext i32 %strideb to i64
@@ -717,12 +713,11 @@ define signext i32 @sadu_2block_16xi8_as_i32(ptr %a, ptr %b, i32 signext %stride
 ; RV32-NEXT:    vwaddu.vv v10, v13, v12
 ; RV32-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
 ; RV32-NEXT:    vadd.vv v8, v10, v8
-; RV32-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
 ; RV32-NEXT:    vmv.s.x v10, zero
-; RV32-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
-; RV32-NEXT:    vwredsumu.vs v8, v8, v10
-; RV32-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
+; RV32-NEXT:    vredsum.vs v8, v8, v10
 ; RV32-NEXT:    vmv.x.s a0, v8
+; RV32-NEXT:    slli a0, a0, 16
+; RV32-NEXT:    srli a0, a0, 16
 ; RV32-NEXT:    ret
 ;
 ; RV64-LABEL: sadu_2block_16xi8_as_i32:
@@ -758,12 +753,11 @@ define signext i32 @sadu_2block_16xi8_as_i32(ptr %a, ptr %b, i32 signext %stride
 ; RV64-NEXT:    vwaddu.vv v10, v13, v12
 ; RV64-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
 ; RV64-NEXT:    vadd.vv v8, v10, v8
-; RV64-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
 ; RV64-NEXT:    vmv.s.x v10, zero
-; RV64-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
-; RV64-NEXT:    vwredsumu.vs v8, v8, v10
-; RV64-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
+; RV64-NEXT:    vredsum.vs v8, v8, v10
 ; RV64-NEXT:    vmv.x.s a0, v8
+; RV64-NEXT:    slli a0, a0, 48
+; RV64-NEXT:    srli a0, a0, 48
 ; RV64-NEXT:    ret
 ;
 ; ZVABD32-LABEL: sadu_2block_16xi8_as_i32:
@@ -795,12 +789,11 @@ define signext i32 @sadu_2block_16xi8_as_i32(ptr %a, ptr %b, i32 signext %stride
 ; ZVABD32-NEXT:    vwabda.vv v10, v12, v15
 ; ZVABD32-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
 ; ZVABD32-NEXT:    vadd.vv v8, v10, v8
-; ZVABD32-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
 ; ZVABD32-NEXT:    vmv.s.x v10, zero
-; ZVABD32-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
-; ZVABD32-NEXT:    vwredsumu.vs v8, v8, v10
-; ZVABD32-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
+; ZVABD32-NEXT:    vredsum.vs v8, v8, v10
 ; ZVABD32-NEXT:    vmv.x.s a0, v8
+; ZVABD32-NEXT:    slli a0, a0, 16
+; ZVABD32-NEXT:    srli a0, a0, 16
 ; ZVABD32-NEXT:    ret
 ;
 ; ZVABD64-LABEL: sadu_2block_16xi8_as_i32:
@@ -832,12 +825,11 @@ define signext i32 @sadu_2block_16xi8_as_i32(ptr %a, ptr %b, i32 signext %stride
 ; ZVABD64-NEXT:    vwabda.vv v10, v12, v15
 ; ZVABD64-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
 ; ZVABD64-NEXT:    vadd.vv v8, v10, v8
-; ZVABD64-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
 ; ZVABD64-NEXT:    vmv.s.x v10, zero
-; ZVABD64-NEXT:    vsetvli zero, zero, e16, m2, ta, ma
-; ZVABD64-NEXT:    vwredsumu.vs v8, v8, v10
-; ZVABD64-NEXT:    vsetvli zero, zero, e32, m4, ta, ma
+; ZVABD64-NEXT:    vredsum.vs v8, v8, v10
 ; ZVABD64-NEXT:    vmv.x.s a0, v8
+; ZVABD64-NEXT:    slli a0, a0, 48
+; ZVABD64-NEXT:    srli a0, a0, 48
 ; ZVABD64-NEXT:    ret
 entry:
   %idx.ext8 = sext i32 %strideb to i64
@@ -951,7 +943,8 @@ define <vscale x 4 x i32> @vmacc_of_sext_add(<vscale x 4 x i16> %x, <vscale x 4 
   ret <vscale x 4 x i32> %r
 }
 
-define <vscale x 4 x i32> @vadd_vx_of_sext_add(<vscale x 4 x i16> %x, <vscale x 4 x i16> %y, i32 %z) ; RV32-LABEL: vadd_vx_of_sext_add:
+define <vscale x 4 x i32> @vadd_vx_of_sext_add(<vscale x 4 x i16> %x, <vscale x 4 x i16> %y, i32 %z) {
+; RV32-LABEL: vadd_vx_of_sext_add:
 ; RV32:       # %bb.0:
 ; RV32-NEXT:    vsetvli a1, zero, e16, m1, ta, ma
 ; RV32-NEXT:    vsra.vi v10, v8, 1

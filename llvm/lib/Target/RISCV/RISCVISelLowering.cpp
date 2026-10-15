@@ -24927,9 +24927,87 @@ static SDValue foldReduceOperandViaVDOT4A(SDValue InVec, const SDLoc &DL,
       {DAG.getConstant(0, DL, ResVT), A.getOperand(0), B.getOperand(0)});
 }
 
+// Avoid blocking simplifications of add reduce trees, as
+// in add (reduce.add X), (reduce.add Y) -> reduce.add (add X, Y)
+// So don't reorder reductions on extensions until after such
+// transformations have completed. This is overly conservative as
+// the ext transformation is much less profitable than eliminating
+// a reduction.
+static bool allowCombineOfExtThroughReduce(SDNode *AddRed) {
+  auto MayBeReductionUser = [](const SDUse &Use, const SDNode *Parent) -> bool {
+    const SDValue V = Use.getUser()->getOperand(1 - Use.getOperandNo());
+    return V->hasOneUse() &&
+           (V.getOpcode() == ISD::VECREDUCE_ADD || V.getOpcode() == ISD::ADD);
+  };
+
+  if (!AddRed->hasOneUse())
+    return true;
+
+  const SDUse &Use = *AddRed->use_begin();
+  const SDNode *User = Use.getUser();
+  if (User->getOpcode() != ISD::ADD)
+    return true;
+
+  // Make sure not add (AddRed, reduce.add X)
+  if (MayBeReductionUser(Use, AddRed))
+    return false;
+
+  SDUse &OuterUse = *User->use_begin();
+  SDNode *Outer = OuterUse.getUser();
+  if (Outer->getOpcode() != ISD::ADD || !Outer->hasOneUse())
+    return true;
+
+  // Make sure not add (add (AddRed, X), reduce.add)
+  return !MayBeReductionUser(OuterUse, User);
+}
+
+// reduce.add (ext X) -> ext (reduce.add X) if the add can't overflow
+// in the narrow type.
+static SDValue
+combineAddReductionOfExtendedAdds(SDNode *N, SelectionDAG &DAG,
+                                  const RISCVSubtarget &Subtarget,
+                                  const RISCVTargetLowering &TLI) {
+  SDValue InVec = N->getOperand(0);
+  unsigned ExtOpc = InVec.getOpcode();
+  if (ExtOpc != ISD::SIGN_EXTEND && ExtOpc != ISD::ZERO_EXTEND)
+    return SDValue();
+
+  if (!allowCombineOfExtThroughReduce(N))
+    return SDValue();
+
+  SDValue Src = InVec.getOperand(0);
+  EVT SrcVT = Src.getValueType();
+  EVT SrcElemVT = SrcVT.getVectorElementType();
+  if (!SrcVT.isFixedLengthVector() || !SrcElemVT.isInteger() ||
+      !TLI.isOperationLegalOrCustom(ISD::VECREDUCE_ADD, SrcVT))
+    return SDValue();
+
+  // Each layer of the reduction tree removes a single known sign bit
+  unsigned NumSignBits = DAG.ComputeNumSignBits(Src);
+  unsigned RequiredSignBits = Log2_32_Ceil(SrcVT.getVectorMinNumElements());
+  if (ExtOpc == ISD::ZERO_EXTEND) {
+    if (!DAG.computeKnownBits(Src).isNonNegative())
+      return SDValue();
+    RequiredSignBits = std::max(2u, RequiredSignBits);
+  } else if (ExtOpc == ISD::SIGN_EXTEND) {
+    // SEXT needs extra bit to preserve the sign bit
+    ++RequiredSignBits;
+  }
+
+  if (NumSignBits < RequiredSignBits)
+    return SDValue();
+
+  SDLoc DL(N);
+  SDValue Reduced = DAG.getNode(ISD::VECREDUCE_ADD, DL, SrcElemVT, Src);
+  return DAG.getNode(ExtOpc, DL, N->getValueType(0), Reduced);
+}
+
 static SDValue performVECREDUCECombine(SDNode *N, SelectionDAG &DAG,
                                        const RISCVSubtarget &Subtarget,
                                        const RISCVTargetLowering &TLI) {
+  if (SDValue V = combineAddReductionOfExtendedAdds(N, DAG, Subtarget, TLI))
+    return V;
+
   if (!Subtarget.hasStdExtZvdot4a8i())
     return SDValue();
 
