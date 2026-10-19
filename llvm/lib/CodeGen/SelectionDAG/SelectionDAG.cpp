@@ -5294,31 +5294,25 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
     break;
   }
   case ISD::ADD: {
-    SmallVector<std::pair<SDValue, unsigned>, 8> Worklist;
-    SmallVector<std::pair<SDValue, unsigned>, 8> Addends;
-    Worklist.emplace_back(Op, Depth);
+    SmallVector<SDValue, 8> Worklist;
+    SmallVector<SDValue, 8> Addends;
+    Worklist.emplace_back(Op);
 
     while (!Worklist.empty()) {
-      auto [Addend, AddendDepth] = Worklist.pop_back_val();
-      if (AddendDepth < MaxRecursionDepth) {
-        if (Addend.getValueType() == VT && Addend.getOpcode() == ISD::ADD) {
-          Worklist.emplace_back(Addend.getOperand(0), AddendDepth + 1);
-          Worklist.emplace_back(Addend.getOperand(1), AddendDepth + 1);
-        } else {
-          Addends.emplace_back(Addend, AddendDepth);
-        }
+      SDValue Addend = Worklist.pop_back_val();
+      if (Addend.getValueType() == VT && Addend.getOpcode() == ISD::ADD) {
+        Worklist.emplace_back(Addend.getOperand(0));
+        Worklist.emplace_back(Addend.getOperand(1));
       } else {
-        // Early exit if one of the branches reaches max depth since it will
-        // have 1 sign bit which will propgate through the reduction tree.
-        return 1;
+        Addends.emplace_back(Addend);
       }
     }
 
     if (Addends.size() > 2) {
       APInt Sum(VTBits + 1, 0);
-      for (auto [Addend, AddendDepth] : Addends) {
+      for (SDValue Addend : Addends) {
         unsigned SignBits =
-            ComputeNumSignBits(Addend, DemandedElts, AddendDepth + 1);
+            ComputeNumSignBits(Addend, DemandedElts, Depth + 1);
         if (SignBits == 1)
           return 1;
 
