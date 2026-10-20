@@ -5249,11 +5249,13 @@ private:
                           ScheduleData *NextLoadStore);
 
     /// Updates the dependency information of a bundle and of all instructions/
-    /// bundles which depend on the original bundle.
+    /// bundles which depend on the original bundle. \p IsRootStoreBundle is
+    /// true if \p Bundle is the root bundle of stores in a new region.
     void calculateDependencies(ScheduleBundle &Bundle, bool InsertInReadyList,
                                BoUpSLP *SLP,
                                const SmallPtrSetImpl<Value *> &ExpandedOps,
-                               ArrayRef<ScheduleData *> ControlDeps = {});
+                               ArrayRef<ScheduleData *> ControlDeps = {},
+                               bool IsRootStoreBundle = false);
 
     /// Sets all instruction in the scheduling region to un-scheduled.
     void resetSchedule();
@@ -27795,7 +27797,10 @@ BoUpSLP::BlockScheduling::tryScheduleBundle(ArrayRef<Value *> VL, BoUpSLP *SLP,
       LLVM_DEBUG(dbgs() << "SLP: try schedule bundle " << Bundle << " in block "
                         << BB->getName() << "\n");
       calculateDependencies(Bundle, /*InsertInReadyList=*/!ReSchedule, SLP,
-                            ExpandedOps, ControlDependentMembers);
+                            ExpandedOps, ControlDependentMembers,
+                            /*IsRootStoreBundle=*/!EI && !OldScheduleEnd &&
+                                S.getOpcode() == Instruction::Store &&
+                                ControlDependentMembers.empty());
     } else if (!ControlDependentMembers.empty()) {
       ScheduleBundle Invalid = ScheduleBundle::invalid();
       calculateDependencies(Invalid, /*InsertInReadyList=*/!ReSchedule, SLP,
@@ -28078,7 +28083,7 @@ void BoUpSLP::BlockScheduling::initScheduleData(Instruction *FromI,
 void BoUpSLP::BlockScheduling::calculateDependencies(
     ScheduleBundle &Bundle, bool InsertInReadyList, BoUpSLP *SLP,
     const SmallPtrSetImpl<Value *> &ExpandedOps,
-    ArrayRef<ScheduleData *> ControlDeps) {
+    ArrayRef<ScheduleData *> ControlDeps, bool IsRootStoreBundle) {
   SmallVector<ScheduleEntity *> WorkList;
   auto ProcessNode = [&](ScheduleEntity *SE) {
     if (auto *CD = dyn_cast<ScheduleCopyableData>(SE)) {
@@ -28402,6 +28407,25 @@ void BoUpSLP::BlockScheduling::calculateDependencies(
 
   assert((Bundle || !ControlDeps.empty()) &&
          "expected at least one instruction to schedule");
+  // The root store bundle of a new region, whose members depend on each other,
+  // never gets ready and the region is dropped together with the tree. The
+  // dependencies of the remaining instructions are calculated only if the
+  // blockers found in the region may still allow a retry with runtime alias
+  // checks.
+  if (IsRootStoreBundle) {
+    for_each(Bundle.getBundle(), ProcessNode);
+    if (any_of(Bundle.getBundle(),
+               [](const ScheduleEntity *SE) {
+                 const auto *SD = dyn_cast<ScheduleData>(SE);
+                 return SD && !SD->getMemoryDependencies().empty();
+               }) &&
+        (SLP->isTryingRuntimeAliasChecks() ||
+         !SLP->Opts.slp_vectorize_with_runtime_alias_checks ||
+         SLP->hasNonCheckableMemBlocker() ||
+         SLP->runtimeChecksFailedForBlock(BB) ||
+         !SLP->canVersionBlockForRuntimeChecks(BB)))
+      return;
+  }
   if (Bundle)
     WorkList.push_back(Bundle.getBundle().front());
   WorkList.append(ControlDeps.begin(), ControlDeps.end());
