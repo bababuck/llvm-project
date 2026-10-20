@@ -3942,6 +3942,9 @@ private:
     void addControlDependency(ScheduleData *Dep) {
       ControlDependencies.push_back(Dep);
     }
+    /// Gets/sets if the instruction may write to memory.
+    bool mayWriteToMemory() const { return MayWriteToMemory; }
+    void setMayWriteToMemory(bool MayWrite) { MayWriteToMemory = MayWrite; }
     /// Gets/sets the next load/store instruction in the block.
     ScheduleData *getNextLoadStore() const { return NextLoadStore; }
     void setNextLoadStore(ScheduleData *Next) { NextLoadStore = Next; }
@@ -3985,6 +3988,10 @@ private:
     /// for scheduling.
     /// Note that this is negative as long as Dependencies is not calculated.
     int UnscheduledDeps = InvalidDeps;
+
+    /// True if the instruction may write to memory. Set for the instructions
+    /// in the list of memory accessing instructions.
+    bool MayWriteToMemory = false;
   };
 
 #ifndef NDEBUG
@@ -28046,6 +28053,7 @@ void BoUpSLP::BlockScheduling::initScheduleData(Instruction *FromI,
         FirstLoadStoreInRegion = SD;
       }
       CurrentLoadStore = SD;
+      SD->setMayWriteToMemory(I->mayWriteToMemory());
     }
 
     if (match(I, m_Intrinsic<Intrinsic::stacksave>()) ||
@@ -28301,7 +28309,7 @@ void BoUpSLP::BlockScheduling::calculateDependencies(
       //    It's important for the loop break condition (see below) to
       //    check this limit even between two read-only instructions.
       Instruction *DepInst = DepDest->getInst();
-      bool MayConflict = SrcMayWrite || DepInst->mayWriteToMemory();
+      bool MayConflict = SrcMayWrite || DepDest->mayWriteToMemory();
       if (DistToSrc >= MaxMemDepDistance ||
           (MayConflict && (IsNonSimpleSrc || NumAliased >= AliasedCheckLimit ||
                            SLP->isAliased(SrcLoc, SrcInst, DepInst)))) {
