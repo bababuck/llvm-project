@@ -3899,6 +3899,7 @@ private:
       clearDirectDependencies();
       MemoryDependencies.clear();
       ControlDependencies.clear();
+      IsRegisteredAsDependent = false;
     }
 
     /// Clears all direct dependencies only, except for control and memory
@@ -3941,6 +3942,11 @@ private:
     /// Adds a control dependency.
     void addControlDependency(ScheduleData *Dep) {
       ControlDependencies.push_back(Dep);
+    }
+    /// Marks this instruction as added to the memory and control dependencies
+    /// of the instructions it depends on. \returns the previous state.
+    bool setRegisteredAsDependent() {
+      return std::exchange(IsRegisteredAsDependent, true);
     }
     /// Gets/sets if the instruction may write to memory.
     bool mayWriteToMemory() const { return MayWriteToMemory; }
@@ -3988,6 +3994,11 @@ private:
     /// for scheduling.
     /// Note that this is negative as long as Dependencies is not calculated.
     int UnscheduledDeps = InvalidDeps;
+
+    /// True if this instruction is in the memory and control dependencies of
+    /// the instructions it depends on. The recalculation of the direct
+    /// dependencies finds the same instructions, so they are not added twice.
+    bool IsRegisteredAsDependent = false;
 
     /// True if the instruction may write to memory. Set for the instructions
     /// in the list of memory accessing instructions.
@@ -5038,10 +5049,7 @@ private:
         auto *SD = dyn_cast<ScheduleData>(BundleMember);
         if (!SD)
           return;
-        SmallPtrSet<const ScheduleData *, 4> VisitedMemory;
         for (ScheduleData *MemoryDep : SD->getMemoryDependencies()) {
-          if (!VisitedMemory.insert(MemoryDep).second)
-            continue;
           // There are no more unscheduled dependencies after decrementing,
           // so we can put the dependent instruction into the ready list.
           LLVM_DEBUG(dbgs() << "SLP:   check for readiness (mem): "
@@ -5049,10 +5057,7 @@ private:
           DecrUnsched(MemoryDep);
         }
         // Handle the control dependencies.
-        SmallPtrSet<const ScheduleData *, 4> VisitedControl;
         for (ScheduleData *Dep : SD->getControlDependencies()) {
-          if (!VisitedControl.insert(Dep).second)
-            continue;
           // There are no more unscheduled dependencies after decrementing,
           // so we can put the dependent instruction into the ready list.
           LLVM_DEBUG(dbgs()
@@ -28193,6 +28198,7 @@ void BoUpSLP::BlockScheduling::calculateDependencies(
         WorkList.push_back(UseSD);
     }
 
+    const bool IsRegistered = BundleMember->setRegisteredAsDependent();
     SmallPtrSet<const Instruction *, 4> Visited;
     auto MakeControlDependent = [&](Instruction *I) {
       // Do not mark control dependent twice.
@@ -28200,7 +28206,8 @@ void BoUpSLP::BlockScheduling::calculateDependencies(
         return;
       auto *DepDest = getScheduleData(I);
       assert(DepDest && "must be in schedule window");
-      DepDest->addControlDependency(BundleMember);
+      if (!IsRegistered)
+        DepDest->addControlDependency(BundleMember);
       BundleMember->incDependencies();
       if (!DepDest->isScheduled())
         BundleMember->incrementUnscheduledDeps(1);
@@ -28326,7 +28333,7 @@ void BoUpSLP::BlockScheduling::calculateDependencies(
           // A dependency dropped during buildTree() must stay dropped on every
           // later recomputation (e.g. the final scheduleBlock()), independent
           // of the current mode, so the schedule remains consistent.
-          if (IgnoredMemDeps.contains(Key)) {
+          if (!IgnoredMemDeps.empty() && IgnoredMemDeps.contains(Key)) {
             Dropped = true;
           } else if (SLP->isCoveredByExistingVersionCheck(BB, SrcInst,
                                                           DepInst)) {
@@ -28363,7 +28370,8 @@ void BoUpSLP::BlockScheduling::calculateDependencies(
           // (e.g. between non-overlapping stores to the same base) that would
           // block scheduling of an otherwise versionable region.
           NumAliased++;
-          DepDest->addMemoryDependency(BundleMember);
+          if (!IsRegistered)
+            DepDest->addMemoryDependency(BundleMember);
           BundleMember->incDependencies();
           if (!DepDest->isScheduled())
             BundleMember->incrementUnscheduledDeps(1);
