@@ -28308,6 +28308,7 @@ void BoUpSLP::BlockScheduling::calculateDependencies(
     unsigned NumAliased = 0;
     unsigned DistToSrc = 1;
     bool IsNonSimpleSrc = !SrcLoc.Ptr || !isSimple(SrcInst);
+    const bool HasVersionCheck = SLP->VersionedBlockCheckedPairs.contains(BB);
 
     for (ScheduleData *DepDest = NextLoadStore; DepDest;
          DepDest = DepDest->getNextLoadStore()) {
@@ -28340,8 +28341,8 @@ void BoUpSLP::BlockScheduling::calculateDependencies(
           // of the current mode, so the schedule remains consistent.
           if (!IgnoredMemDeps.empty() && IgnoredMemDeps.contains(Key)) {
             Dropped = true;
-          } else if (SLP->isCoveredByExistingVersionCheck(BB, SrcInst,
-                                                          DepInst)) {
+          } else if (HasVersionCheck && SLP->isCoveredByExistingVersionCheck(
+                                            BB, SrcInst, DepInst)) {
             // This block is the fast path of an earlier versioning whose
             // runtime check already proved these bases disjoint, so the
             // dependency can be dropped without emitting a new check.
